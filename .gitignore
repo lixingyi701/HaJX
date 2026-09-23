@@ -1,2 +1,5 @@
 # macOS metadata
 .DS_Store
+
+# 本地数据（530MB，含 >100MB 单文件，待决定归档方式）
+附件/
