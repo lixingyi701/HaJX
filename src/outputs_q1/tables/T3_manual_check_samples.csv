@@ -1,0 +1,254 @@
+row,domain,conflict,type,Q,Q_resolved,content_head
+275,arxiv,0.7892882311486963,DSIR高×模型评分器低,0.7170703356054572,0.7145480097544102,"
+
+
+
+
+
+
+
+
+
+
+\section{Related Work}
+\subsection{Distributed Training} 
+Training large machine learning models (e.g., deep neural networks) is computationally intensive. In order to finish the training process in a reasonable time, many studies worked on distributed training to speedup. There are many works that aim to improve the scalability of distributed training, both at the algorithm level~\cite{li2014scaling, dean2012large, recht2011hogwild, goyal2017accurate, jia2018highly} and at the framew"
+2941,c4,0.7609,DSIR高×模型评分器低,0.3462412072254969,0.36074857235867663,"Wishing you all a Happy Thanksgiving and please be sure to let your guests know to keep any of that rich table food away from your pets. A little from here, a little there and then not so little total and in to emergency for gastrointestinal issues.
+And check out our online pharmacy at peninsulaAveVet@gmail.com. The medications come directly from the manufacturers or their legitimate distributors, which assures you that it is the pure product and not expired (issues with many well known online p"
+6423,c4,0.8792,DSIR高×规则型低,0.5191721183171709,0.50653778488083,"Application Description: Construction of an on slab two storey single family dwelling with a secondary suite and an attached double garage.
+Revision June 4, 2013 lower deck size altered.
+Revision: July 16, 2013--Changed location of furnace, moved and changed window size and closet openings changed."
+7189,c4,0.8329,DSIR高×规则型低,0.28084478110334044,0.2761268577279842,"Spent this afternoon setting up the stand at the Malvern Showground...took a while as you can see the amount of work I've managed to squeeze onto the space!
+As I am on duty for a half day tomorrow I plan to have a little wander around the rest of the show providing it is not pouring with rain!!!"
+12079,commoncrawl,0.8006224066390042,DSIR高×模型评分器低,0.38911382752402857,0.37463658222774276,"1967 Houston Mavericks Tee
+With players like Willie Somerset & DeWitt Menyard gracing the court for the Houston it's a shame they didn't make it to the big show. Houston Mavericks played in Sam Houston Coliseum from 1967 to 1969 before eventually folding and moving operations to Greensboro in 1969 to become the Carolina Cougars. When the ABA and NBA merged in 1976 the glory of the Houston Mavericks was retired to the rafters of Basketballs past glory.
+Our signature tee that was crafted with the "
+13832,commoncrawl,0.7987551867219916,模型评分器高×DSIR低,0.6309569938511177,0.6310791713486691,"7 Land Biomes You Instantly Need to Know
+Tundra, Taiga, Grassland, Savana, and more are all different types of land biomes on our planet Earth.
+Our world is full of different diverse biomes that you can see around you wherever you go. Some of these biomes exist on land and others in the water. In this article, we are only going to talk about land biomes. But before we get into the discrete details of each type of the seven types of land biomes, we need to know first the definition of a biome and"
+15149,commoncrawl,0.7534751037344398,规则型高×轻量分类器低,0.7271180727614986,0.7265150215262574,"Helping Australians take their lives back from drugs
+The Turnbull Government is today launching the next phase of our National Drugs Campaign to help tackle the use of illicit drugs, particularly ice, among young Australians.
+The new television and online campaign illustrates the range of risks associated with drug use and provides information on the range of resources, support and treatment options available.
+The $10 million campaign has resources for parents, including the Positive Choices Onl"
+15459,commoncrawl,0.8746887966804979,轻量分类器高×模型评分器低,0.4825989778278206,0.5377461008499547,"Diamondbacks' Nick Ahmed Day-to-Day With a Back Issue
+Aug 29, 2015; Phoenix, AZ, USA; Arizona Diamondbacks shortstop Nick Ahmed (13) throws to first base for an out in the third inning against the Oakland Athletics at Chase Field. Mandatory Credit: Matt Kartozian-USA TODAY Sports
+Nick Ahmed made one of the better defensive plays of the season on Tuesday night. In the seventh inning, his diving stop of a ground ball off the bat of Alex Guerrero and getting a force out at second base prevented a b"
+16252,commoncrawl,0.8882780082987551,规则型高×轻量分类器低,0.5626389871640991,0.5640435936115583,"About KVIC
+Khadi Certification
+Khadi Raw Material
+Village Ind's
+Mineral Based Industry
+ABFPI
+Pulses & Cereals Processing Industry
+Gur & Khandsari Industry
+Palmgur Industry
+Fruit & Vegetable Processing Industry
+Village Oil Industry
+PCBI
+Non Edible Oils & Soap Industry
+Cottage Match Industry
+Medicinal Plants Industry
+Bee Keeping Industry
+Minor Forest Based Industries
+HMPFI
+Hand Made Paper Industry
+Fibre Industry
+REBT
+Carpentry & Blacksmithy
+SEP/Service Industry
+V. I. Co-ordination
+Mission Solar Ch"
+16460,commoncrawl,0.9316390041493776,模型评分器高×规则型低,0.45856293394527764,0.3987334631614498,"Subjects -> METEOROLOGY (Total: 106 journals)
+Climate Change Economics
+Number of Followers: 51
+Hybrid journal (It can contain Open Access articles)
+Published by World Scientific [121 journals]
+THE REGIONAL ECONOMIC IMPACTS OF CLIMATE CHANGE ON FAMILY FARMING AND
+LARGE-SCALE AGRICULTURE IN BRAZIL: A COMPUTABLE GENERAL EQUILIBRIUM
+Free pre-print version: Loading...
+Rate this result: What is this?
+Please help us test our new pre-print finding feature by giving the pre-print link a rating.
+A 5 star "
+18573,commoncrawl,0.833713692946058,轻量分类器高×规则型低,0.5484049217108365,0.5348586887958023,"Gaspar Noe's Five Favorite Films
+by Kerr Lordygan | November 5, 2015 | Comments
+Getty Images / Nicholas Hunt
+Gaspar Noe is known for making provocative films, but he says it's not particularly easy to be provocative anymore, since nothing can top the outrageous and exciting themes of some of the films he grew up with. With his new film, Love, now open, and others like Enter the Void, 7 Days in Havana, and Irréversible in his filmography, Noe has certainly pushed envelopes of all sizes. But now h"
+23952,github,0.75495,轻量分类器高×规则型低,0.5356596470409007,0.5344738387842881,"<?php
+namespace Debug\Service;
+
+class Timer {
+	
+    protected $start;
+    protected $timeAsFloat;
+    
+    public function __construct($timeAsFloat = false)
+    {
+    	$this->timeAsFloat = $timeAsFloat;
+    }
+    
+    public function start($key)
+    {
+    	$this->start[$key] = microtime($this->timeAsFloat);
+    }
+    
+    public function stop($key) 
+    {
+    	if(!isset($this->start[$key])) {
+    		return null;
+    	}
+    	
+    	return microtime($this->timeAsFloat) - $this->start[$key];
+    }
+  "
+25021,github,0.76435,规则型高×DSIR低,0.37360829482340036,0.36736766272523425,"<!DOCTYPE html>
+<html lang=""en"">
+  <head>
+    <title>LogLevel Enum Reference</title>
+    <link rel=""stylesheet"" type=""text/css"" href=""../css/jazzy.css"" />
+    <link rel=""stylesheet"" type=""text/css"" href=""../css/highlight.css"" />
+    <meta charset='utf-8'>
+    <script src=""../js/jquery.min.js"" defer></script>
+    <script src=""../js/jazzy.js"" defer></script>
+    
+  </head>
+  <body>
+    <a name=""//apple_ref/swift/Enum/LogLevel"" class=""dashAnchor""></a>
+    <a title=""LogLevel Enum Reference""></a>
+   "
+25555,github,0.9158000000000001,模型评分器高×轻量分类器低,0.5297335452478388,0.5902783830986569,"# Applications
+
+<h3 class=""subheader"">We use Rails to develop our own apps and Foundation makes us to do so much quicker. You can start using Foundation in your projects by following these instructions.</h3>
+
+***
+
+### Add Foundation to your Rails app
+
+You can use the `foundation-rails` gem to make it super easy to use Foundation in your upcoming Rails project. Just add the following to your `Gemfile`:
+
+```ruby
+gem 'foundation-rails'
+```
+
+Then run `bundle install`.
+
+### Configuring Foundation
+
+Yo"
+26496,github,0.8715999999999999,DSIR高×规则型低,0.47244290052386684,0.456261307904263,"import { Component } from '@angular/core';
+
+
+@Component({
+  templateUrl: 'root-page.html'
+})
+export class RootPage {
+  delete(chip: Element) {
+    chip.remove();
+  }
+}
+"
+26765,github,0.8739999999999999,轻量分类器高×规则型低,0.5123859201180703,0.5094053154341229,"export class ImprovedNoise {
+
+	constructor();
+	noise( x: number, y: number, z: number ): number;
+
+}
+"
+30247,github,0.8544499999999999,规则型高×模型评分器低,0.4832054671500961,0.44394697155656576,"/*
+ * Powered By wufuwei
+ */
+
+package com.osp.biz.service.impl;
+
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+
+
+
+import com.osp.biz.service.IOspPullcontentlogService;
+import com.osp.biz.manager.IOspPullcontentlogManager;
+import com.osp.biz.model.OspPullcontentlog;
+
+
+import cn.org.rapid_framework.page.Page;
+import cn.org.rapid_framework.page.PageRequest;
+
+
+/**
+ * @author David Wu email:oradb(a)163.com
+ * @ver"
+32668,stackexchange,0.9193,DSIR高×模型评分器低,0.22039304403452092,0.20969520018252538,"Q: After updating to Ubuntu 15.04 all my printers print once then cannot connect After updating to Ubuntu 15.04 all my printers, Epson Artisan 837, HP Officejet Pro  8500, and copiers, Lexmark XC2100 and Toshiba 287CS print once then cannot connect. I've tried deleting the printers and reinstalling them. If I readdress the printer or move the print job to another printer, sometimes it works but usually I reboot the computer. I really don't want to have to reinstall Ubuntu. Can you help? Computer"
+36099,stackexchange,0.8693,模型评分器高×DSIR低,0.702117805519468,0.6887795681761024,"Q: Almost sure convergence of subsequence If we have for a sequence of identically independent variables with  $\limsup \{|X_n|>n\}$ happens almost surely. Can we conclude that $\limsup \{n^{-1}|\sum X_j|>1\}$ happens a.s.? One of the problem I was working on seem to need this to conclude but I don't see why this is true. Any help?
+
+A: Yes, it is true.  Here is a proof of a generalization:  
+Claim:
+Suppose $\{X_n\}_{n=1}^{\infty}$ are independent and identically distributed (i.i.d.) and there is"
+38176,stackexchange,0.9120999999999999,DSIR高×模型评分器低,0.42276906974382233,0.40722618794715637,"Q: FFmpeg HLS conversion cause increased file size I am trying to convert my MP4 file to HLS format while it stays as same quality.. But at the end my 60 mb video becomes 155mb. I use the code below. How to make the HLS size same as initial file while quality stays the same?
+ffmpeg -i 10001.mp4 -profile:v baseline  
+-start_number 0 -hls_time 10 -hls_list_size 0 -f hls 10001.m3u8
+
+"
+41307,wikipedia,0.86315,模型评分器高×规则型低,0.6288844162792768,0.63092804472473,"Digitální propast (též jako digitální rozdělení, ) vyjadřuje propast mezi těmi, kteří disponují přístupem k technologiím (jako je internet), a těmi, kteří tento přístup nemají. Jedná se o ekonomickou a sociální nerovnost mezi skupinami osob v dané populaci, která úzce souvisí s přístupem, užitím a znalostí informačních a komunikačních technologií (ICT). Pojem je rozšířením obecného pojmu ze sedmdesátých let 20. století vědomostní propast.
+
+Jan van Dijk ve své knize The Network Society (původní n"
+42263,wikipedia,0.9036,模型评分器高×DSIR低,0.560244798110414,0.5547468303524323,"Catch-22 ist ein 1961 erschienener Roman des amerikanischen Schriftstellers Joseph Heller.
+
+Hellers Satire über die Absurdität des Krieges war anfangs wenig erfolgreich, wurde aber dank der Mundpropaganda begeisterter Leser schließlich zu einem Welterfolg. Die Zeitschrift Time zählt den Roman zu den besten 100 englischsprachigen Romanen, die zwischen 1923 und 2005 veröffentlicht wurden. Auch The Guardian nahm ihn in ihre Liste der 100 besten englischsprachigen Romane auf.
+
+Titel 
+Heller schrieb "
+43176,wikipedia,0.9103,DSIR高×模型评分器低,0.3017364500499794,0.37752386023523654,"Sawo is een bestuurslaag in het regentschap Nias Utara van de provincie Noord-Sumatra, Indonesië. Sawo telt 699 inwoners (volkstelling 2010).
+
+Plaats in Noord-Sumatra"
+43382,wikipedia,0.841,模型评分器高×DSIR低,0.6888397620817864,0.6847345507215804,"La videofluoromanometria (VFM) è una tecnica diagnostica utilizzata per la valutazione del paziente disfagico che prevede la contemporanea esecuzione della videofluoroscopia (VFS) e la registrazione simultanea di un tracciato manometrico.
+
+Apparecchiatura 
+Per l'esecuzione della videofluoromanometria è necessaria una apparecchiatura radiografica ed una manometrica, collegati ad un sistema computerizzato dotato di scheda grafica per la gestione di immagini radiografiche e software dedicato per la"
+43912,wikipedia,0.99105,DSIR高×模型评分器低,0.06924924272038917,0.05959059377803106,"|}
+
+Literatur
+
+Weblinks 
+
+Weisskirchen
+!"
+45891,wikipedia,0.9177,模型评分器高×DSIR低,0.6029474405942101,0.6115800424673081,"Tapejara is een geslacht van uitgestorven pterosauriërs, behorend tot de groep van de Pterodactyloidea, die tijdens het Vroeg-Krijt leefde in het gebied van het huidige Brazilië. Er is slechts één geldige soort bekend, Tapejara wellnhoferi.
+
+Naamgeving
+De soort is in 1989 benoemd en beschreven door Alexander Wilhelm Armin Kellner. De geslachtsnaam betekent 'het oude wezen' in de taal van de Tupi. De soortaanduiding eert de Duitse paleontoloog Peter Wellnhofer.
+
+Het fossiel, holotype MN 6595-V (e"
+46801,wikipedia,0.94145,DSIR高×规则型低,0.13239921866030088,0.11888927660658986,"
+
+Bodendenkmäler der Gemeinde
+
+Bodendenkmäler in der Gemarkung Langenneufnach 
+
+|}
+
+Siehe auch 
+ Liste der Baudenkmäler in Langenneufnach
+
+Anmerkungen
+
+Weblinks
+
+Einzelnachweise 
+
+Langenneufnach
+!
+Langenneufnach"
+47496,wikipedia,0.7509999999999999,模型评分器高×DSIR低,0.6183533080339616,0.6170111224701148,"João Baptista Lavanha (Lisboa, c. 1550 - Madrid, 31 de Março de 1624) foi um engenheiro,  matemático e cosmógrafo português. Foi nomeado cronista-mor do reino em 1618.
+
+Biografia
+De origem judia, nasceu em ano desconhecido, em meados do século XVI. Eram seus pais Luís de Lavanha, um fidalgo da Corte e D. Jerónima Dança, de quem nada se sabe. Também se desconhecem detalhes acerca da sua infância e juventude, acreditando-se que tenha concluído os seus estudos em Roma, a serviço de D. Sebastião, de"
+48812,wikipedia,0.97035,DSIR高×模型评分器低,0.09217249592785559,0.08883492180485332,"Kaiserkreuz steht für
+Kaiserkreuz (Großglockner), Gipfelkreuz
+Kaiserkreuz (Kleinenglis), Wegekreuz"
+50827,wikipedia,0.91605,DSIR高×模型评分器低,0.15261599851608557,0.13887683635649245,"
+
+Codici 
+ oog – codice ISO 639-3 della lingua ong
+
+Altri progetti"
