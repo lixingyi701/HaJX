@@ -1,0 +1,109 @@
+\section{模型的检验与灵敏度分析}
+
+\subsection{模型检验}
+
+表~\ref{tab:checks} 汇总了全文的检验。“互相验证”只用于\emph{同一问题、不同假设}的方法对，判据取排序或数值的一致性；上下游分工衔接的方法之间不存在验证关系，本文也不作此类声称。
+
+\begin{table}[!htbp]
+\centering\small
+\caption{全文检验清单}
+\label{tab:checks}
+\begin{tabular}{cp{4.3cm}p{2.2cm}p{2.8cm}p{4.3cm}}
+\toprule
+问题 & 检验对 & 类型 & 判据 & 结果 \\
+\midrule
+\multirow{6}{*}{一}
+& CRITIC vs 等权/TOPSIS/PCA & 互相验证 & 样本级 Spearman & $0.991/0.946/0.871$ \\
+& A1 vs A2/A3 全量 & 代表性 & KS、Cohen's $d$ & $p=0.60/0.12$，$d\approx0.005$ \\
+& 冲突结论跨集复现 & 稳健性 & 冲突率、主类型 & $21.5\%/21.1\%/22.9\%$，类型一致 \\
+& clr vs 裸 OLS & 改进证据 & 检验集 $R^2$ & $0.772$ vs $0.654$ \\
+& clr 线性 vs 梯度提升 & 互相验证 & 候选秩相关 & $0.77$ \\
+& 1M $\to$ 60M $\to$ 1B & 假设 2 检验 & 排名 Spearman & $0.52/0.47/0.68$，截距漂、斜率稳 \\
+\midrule
+\multirow{3}{*}{二}
+& 加性 vs 乘子族 & 形式选择 & 五折 cv-RMSE & $0.051$ vs $0.099$–$0.105$ \\
+& 解析解 vs 数值优化 & 互相验证 & 相对误差 & $<10^{-5}$ \\
+& 标度律 vs 真实文献点 & 外部合理性 & 趋势 Spearman & $0.959$–$0.983$ \\
+\midrule
+\multirow{3}{*}{三}
+& 数值解 vs 闭式 $N^*$ & 互相验证 & 相对误差 & $\le1.83\times10^{-7}$（15 组） \\
+& 求解器 vs 网格穷举 & 互相验证 & Loss 差、区制 & $\le1.6\times10^{-5}$，区制一致 \\
+& $C_{\mathrm{crit}}$ 三口径 & 互相验证 & 极差 & 主口径 $\le0.05\dex$ \\
+\midrule
+\multirow{4}{*}{四}
+& C8 重算 vs C1 & 口径核验 & Pearson & $\ge0.989$（MATH $0.801$） \\
+& sigmoid vs 线性桥接 & 形式选择 & 留一 RMSE & $8.08$ vs $8.28$ \\
+& 分解 dex/yr vs 窗口回归 & 互相验证 & 同量级 & $0.29$–$0.78$ vs $0.44$–$0.77$ \\
+& 预测回测 & 外部检验 & 2025.25 误差 & M1b $-0.78$，线性外推 $+2.65$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+不一致的地方同样是结论。$\rho_{Q\nu}=-0.06$ 是“内在质量不等于训练价值”的定量证据，而不是检验失败；60M/1B 的绝对预测失效源于截距漂移，这正说明跨尺度外推必须做尺度修正；问题四中结构模型与线性模型相差 32.8pp，本文如实并列，并解释其来源。A12–A15、B6–B8 与 B10 的证据等级（半合成、外推生成）在全文中始终保留标注，没有升格为实证。
+
+\subsection{灵敏度与稳健性分析}
+
+\textbf{问题一。}冲突阈值 $\tau$ 在 $[0.6,0.85]$ 内变化时，冲突率在 $12\%$–$35\%$ 之间连续变化，域排序与主冲突类型不变。Huber 降权与调和平均两种消解规则下，域级质量排序的 Spearman 相关 $>0.95$。评价权重取等权与 pile\_cc 单域两个口径时，$\bp^*$ 的头部域一致，只是集中度不同。
+
+\textbf{问题二。}$Q_{\mathrm{ref}}$ 取 Pile 配比加权（$0.5608$）与 token 加权两个口径时，$\hat Q_{\mathrm B}$ 相差不到 $0.02$，命题 1–4 的定性结论不变。$k_0,k_1$ 的 95\% CI 宽度约为 $\pm10\%$，代入命题~\ref{prop:sub} 后，等效倍数的区间为 $[1.52,1.77]$。
+
+\textbf{问题三。}对问题二的 500 组 bootstrap 参数，$C_{\mathrm{crit}}$ 的区间宽度在 $\pm0.03\dex$ 以内。$\eta$ 取 $\pm50\%$ 时，2048 档的 $C_{\mathrm{crit}}$ 移动约 $\pm0.012\dex$，131k 档移动约 $\pm0.2\dex$，此时 $L_{\mathrm{ctx}}^{\mathrm{crit}}$ 相应变为 $60000/20000$。$Q_0$ 相图（图~\ref{fig:q3phase}）表明：$Q_0$ 越低，$C_{\mathrm{crit}}$ 越小，内点区间越宽。
+
+\textbf{问题四。}C6 中 Medium 层的权重取 $0.25$–$1.0$ 时，$S(1.85)$ 的变化不到 $0.4$ 分。C3 历史点的权重取 $0.2$ 与 $1.0$ 时，技术进步率分别为 $0.50$ 与 $0.21\dex/\mathrm{yr}$，因此只作敏感性分析。分解换用 2024$\to$2025 与 2024.5$\to$2025.25 两个窗口，M1b 的技术占比为 $7.1\%$ 与 $8.2\%$，M2 为 $30.6\%$ 与 $24.3\%$，“规模为主”的定性结论不变。
+
+\section{模型的评价与推广}
+
+\subsection{模型的优点}
+
+(1) \textbf{证据分层，接口贯通。}半合成与外推数据只用于形式选择和稳健性讨论，没有混入主结论。四问之间通过接口文件衔接，广义标度律全文只估计一次，下游各问直接消费，口径前后一致。
+
+(2) \textbf{形式由数据裁决。}冲突阈值取最大曲率点，质量项形式由五折交叉验证决定，桥接形式由留一交叉验证决定，结构性转移由 KKT 活跃集定义，每一步都有可检验的判据。
+
+(3) \textbf{解析与数值互验。}四条命题、$L_{\mathrm{ctx}}^{\mathrm{crit}}$ 与 $\Phi(C)=1$ 判据都有闭式表达，并与数值解逐项对照，结论可解释。
+
+(4) \textbf{直面误导信息。}冲突率、Loss–Benchmark 相关的符号、最优配置、是否提质等问题上，本文都用量化证据修正了《数据说明》中的误导性说法。
+
+\subsection{模型的局限与改进方向}
+
+(1) 11 个 inferred 域的质量分依赖校准函数（$R^2_{\mathrm{cv}}=0.31$），信息量有限；若能增补这些域的模型评分器信号，可显著收紧区间。
+
+(2) 附件 B 的 B6–B8 为半合成数据，$k_0,k_1$ 的绝对数值不宜直接外推到真实训练体系，应用时以趋势与结构结论为主。
+
+(3) 问题三中 $g(Q)$ 的形式与参数取自赛题附录 B，“角点解”与“对数型早两个数量级提质”对成本函数的形式敏感，本文已把三种形式并列给出。
+
+(4) C6 的 High 层只有 7 点且全部位于底噪区，桥接的上升段依赖 Medium 层；问题四的结构口径与线性口径相差 32.8pp，是全文最大的不确定性来源。若能获得更多同验证集的 Loss–Benchmark 对，可以缩小这一分歧。
+
+(5) 预测为情景条件预测，不包含新架构等离散突破。
+
+\subsection{模型的推广}
+
+“基线 + 质量修正”的标度律结构，以及“约束取等后解析消元”的降维方法，可推广到含多种数据处理成本（去重、合成数据、多模态对齐）的资源配置问题。“S 形桥接 + 连续时间项 + Shapley 分解”的框架也适用于其他存在能力饱和的技术演进分析。
+
+\section{结论}
+
+本文围绕“算力约束下如何配置资源以提升大模型能力”，建立了四个递进衔接的模型。
+
+\textbf{问题一}建立了从 22 个异质信号到连续质量分的可复现管线，测得并消解了 $21.5\%$ 的指标冲突，用 clr 回归给出 17 域配比的迁移矩阵与最优配比（预测降损 $9.9\%$），并发现域级质量与训练边际价值近乎无关（$\rho=-0.06$）。
+
+\textbf{问题二}以交叉验证选出的加性形式建立了广义标度律 $L=E+[A+k_1(1-Q)]N^{-\alpha}+BD^{-\beta}+(1-Q)k_0$，并推出四条解析结论：质量弹性约为规模弹性的 4 倍；质量与规模的等效替代随规模放大；存在规模无法弥补的质量地板；质量越高，最优配置越偏向小模型、多数据。
+
+\textbf{问题三}把约束优化解析降维为二维无约束问题，以 KKT 活跃集的改变定义结构性转移，并用 $\Phi(C)=1$ 识别临界预算。主口径下，指数型、幂函数型、对数型的 $\log_{10}C_{\mathrm{crit}}$ 为 $20.61/20.48/18.52$，转移为“不提质 $\to$ 提满”的跳变。上下文长度越过 $6/\eta=30000$ 后，注意力成本占主导，最优模型随之缩小。配比与规模决策近似可分离。
+
+\textbf{问题四}用“标度律 + S 形桥接 + 时间技术项”的结构模型分解前沿增长：规模扩张是主导，非规模技术进步占 $13\%$–$23\%$（结构口径；线性口径的 $30\%$–$46\%$ 为上界参考）。在算力增速放缓至 $0.15\dex/\mathrm{yr}$ 的情景下，24 个月的 base 开源前沿中位数为 $44.1$，技术进步在增量中的占比升至 $77\%$。
+
+四问共同说明，\textbf{数据质量与配比是与算力并列的一等资源}：小预算时应把算力用在规模上，跨过临界预算后应把质量提满；算力增长放缓时，能力增长将越来越依赖非规模技术进步。
+
+\begin{thebibliography}{99}\small
+\bibitem{hoffmann} Hoffmann J, Borgeaud S, Mensch A, et al. Training compute-optimal large language models[C]//Advances in Neural Information Processing Systems 35 (NeurIPS). 2022.
+\bibitem{bahri} Bahri Y, Dyer E, Kaplan J, et al. Explaining neural scaling laws[J]. Proceedings of the National Academy of Sciences, 2024, 121(27): e2311878121.
+\bibitem{asai} Asai A, et al. Synthesizing scientific literature with retrieval-augmented language models[J]. Nature, 2026, 650: 857--863.
+\bibitem{regmix} Xia M, et al. RegMix: Data mixture as regression for language model pre-training[C]//International Conference on Machine Learning (ICML). 2024.
+\bibitem{pythia} Biderman S, et al. Pythia: A suite for analyzing large language models across training and scaling[C]//International Conference on Machine Learning (ICML). 2023.
+\bibitem{schaeffer} Schaeffer R, Miranda B, Koyejo S. Are emergent abilities of large language models a mirage?[C]//Advances in Neural Information Processing Systems 36 (NeurIPS). 2023.
+\bibitem{muennighoff} Muennighoff N, et al. Scaling data-constrained language models[C]//Advances in Neural Information Processing Systems 36 (NeurIPS). 2023.
+\bibitem{fineweb} Penedo G, et al. The FineWeb datasets: Decanting the web for the finest text data at scale[C]//NeurIPS Datasets and Benchmarks Track. 2024.
+\bibitem{aitchison} Aitchison J. The Statistical Analysis of Compositional Data[M]. London: Chapman \& Hall, 1986.
+\bibitem{critic} Diakoulaki D, Mavrotas G, Papayannakis L. Determining objective weights in multiple criteria problems: The CRITIC method[J]. Computers \& Operations Research, 1995, 22(7): 763--770.
+\bibitem{huber} Huber P J. Robust estimation of a location parameter[J]. The Annals of Mathematical Statistics, 1964, 35(1): 73--101.
+\bibitem{shapley} Shapley L S. A value for $n$-person games[M]//Contributions to the Theory of Games II. Princeton: Princeton University Press, 1953: 307--317.
+\end{thebibliography}

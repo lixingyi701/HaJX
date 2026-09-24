@@ -1,0 +1,107 @@
+\newpage
+\begin{center}{\heiti\large 附录 A\quad 补充材料与程序}\end{center}
+\addcontentsline{toc}{section}{附录 A 补充材料与程序}
+\setcounter{subsection}{0}
+\renewcommand{\thesubsection}{A.\arabic{subsection}}
+
+\subsection{支撑材料清单与运行说明}
+
+全部代码为 Python 3，只依赖 numpy、pandas、matplotlib，不依赖 scipy。各脚本在所在目录内运行，产出落盘到对应的 \texttt{outputs\_q*} 目录，下游各问只读取上游的接口文件（\texttt{interface/}）。
+
+\begin{table}[H]
+\centering\small
+\caption{程序清单}
+\label{tab:code}
+\begin{tabular}{p{2.3cm}p{5.2cm}p{7.2cm}}
+\toprule
+目录 & 脚本 & 功能 \\
+\midrule
+\texttt{code\_q1/} & \texttt{q1\_01}–\texttt{q1\_07} & 指标展开、CRITIC 评分、冲突、桥接、clr 回归、跨尺度、$\bp^*$ \\
+ & \texttt{q2\_00\_reverse\_engineering} & 附件 B 生成公式逆向 \\
+\texttt{code\_q2/} & \texttt{q2\_01\_fit}，\texttt{q2\_02\_theory} & 两步拟合与五形式交叉验证；四条命题的数值互验 \\
+\texttt{code\_q3/} & \texttt{q3\_00\_model} & 广义律、三项成本、向量化求解器、$\Phi$ 判据 \\
+ & \texttt{q3\_01}–\texttt{q3\_03} & 210 组最优解、结构性转移与敏感性、配比联立 \\
+\texttt{code\_q4/} & \texttt{q4\_01}–\texttt{q4\_05} & C8 解析、饱和度、桥接、分解、预测与回测 \\
+ & \texttt{q4\_99\_check\_report} & 问题三、四的 76 项关键数字与输出文件自动核对 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+运行顺序为：\texttt{code\_q1}（\texttt{q1\_01}$\to$\texttt{q1\_07}）$\to$ \texttt{code\_q2} $\to$ \texttt{code\_q3}（\texttt{q3\_01}$\to$\texttt{q3\_03}）$\to$ \texttt{code\_q4}（\texttt{q4\_01}$\to$\texttt{q4\_05}，最后运行 \texttt{q4\_99}）。
+
+\subsection{核心程序}
+
+\textbf{(1) CRITIC 权重与加权几何平均（\texttt{code\_q1/q1\_02\_quality.py} 节选）}
+\begin{lstlisting}
+def fit_critic(self, Z):
+    sd = Z.std(axis=0, ddof=1)                 # contrast intensity
+    R = np.corrcoef(Z.T)                       # indicator correlation
+    C = sd * (1 - R).sum(axis=1)               # information content C_j
+    self.critic_w = C / C.sum()
+    return self.critic_w
+
+def score(self, Z, w=None):                    # weighted geometric mean
+    w = self.critic_w if w is None else w
+    return np.exp((w[None, :] * np.log(np.clip(Z, EPS, 1))).sum(axis=1))
+\end{lstlisting}
+
+\textbf{(2) 问题三向量化求解器（\texttt{code\_q3/q3\_00\_model.py} 节选）}
+\begin{lstlisting}
+def _profile(C, Q, dg, kappa, p, lo=1.0, hi=17.0, it=70):
+    """golden-section search on log10 N for fixed Q; D solved from budget"""
+    def f(x):
+        N = 10.0 ** x
+        D = C / (kappa * N + dg)               # budget binds: D eliminated
+        return loss(N, D, Q, p)
+    a = np.full(C.shape, lo); b = np.full(C.shape, hi)
+    for _ in range(it):
+        c = b - _GR * (b - a); d = a + _GR * (b - a)
+        m = f(c) < f(d)
+        b = np.where(m, d, b); a = np.where(m, a, c)
+    x = (a + b) / 2
+    return f(x), x
+
+def solve(C, g, Lctx=2048, Q0=Q0_MAIN, p=PAR, eta=ETA, nQ=41, levels=3):
+    kappa = 6 + eta * Lctx
+    lo, hi = Q0, 1.0
+    for _ in range(levels):                    # 3-level grid refinement on Q
+        Qg = lo + (hi - lo) * np.linspace(0, 1, nQ)
+        dg = np.maximum(g(Qg) - g(Q0), 0.0)
+        Lm, _ = _profile(C, Qg, dg, kappa, p)
+        Qb = Qg[np.argmin(Lm)]; step = (hi - lo) / (nQ - 1)
+        lo, hi = max(Qb - step, Q0), min(Qb + step, 1.0)
+    # endpoint protection at Q0 and 1, then classify KKT active set
+    ...
+
+def phi_ratio(C, g, Lctx, Qeval, Q0, p=PAR, eta=ETA):
+    """Phi = marginal gain of quality / marginal loss from crowding out D"""
+    kappa = 6 + eta * Lctx
+    dg = max(g(Qeval) - g(Q0), 0.0)
+    _, x = _profile(C, Qeval, dg, kappa, p)
+    N = 10.0 ** x; D = C / (kappa * N + dg)
+    num = (p["k0"] + p["k1"] * N ** -p["al"]) * (kappa * N + dg)
+    den = p["be"] * p["B"] * D ** -p["be"] * g_prime(Qeval)
+    return num / den                           # C_crit solves Phi(C) = 1
+\end{lstlisting}
+
+\textbf{(3) 结构分解模型与 Shapley 分解（\texttt{code\_q4/q4\_04\_decomp.py} 节选）}
+\begin{lstlisting}
+def f_add(p, L, t):                            # M1b: S-bridge + linear tech term
+    return p["lo"] + p["amp"] * sig(L, p["k"], p["L0"]) + p["tau"] * t
+
+def shapley(fun, L0, t0, L1, t1):
+    """two-factor Shapley: scale (L_hat) vs technology (t)"""
+    sc = 0.5 * ((fun(L1, t0) - fun(L0, t0)) + (fun(L1, t1) - fun(L0, t1)))
+    te = 0.5 * ((fun(L0, t1) - fun(L0, t0)) + (fun(L1, t1) - fun(L1, t0)))
+    return sc, te
+\end{lstlisting}
+
+\subsection{AI 使用披露}
+
+依据赛题“AI 使用规范”，现披露如下。
+
+\textbf{所用工具：}Claude（Anthropic）。
+
+\textbf{使用环节与贡献范围：}(1) 资料整理与概念理解：梳理赛题附件的字段结构与《数据说明》中的条目；(2) 代码编写与调试：数据读取、向量化求解器、绘图脚本的编写与报错排查；(3) 结果核对：编写自动核对脚本，把报告中的数字与程序输出逐项比对；(4) 排版与文字：LaTeX 排版、图表整理与语句润色。
+
+\textbf{参赛队的工作与责任：}模型路线的选择（证据分层、质量项形式由交叉验证裁决、结构性转移按 KKT 活跃集定义、分解方法并列报告等）、公式推导与结论判断由参赛队确定，并对 AI 输出的全部代码与数值逐项运行、核验。文中理论与公式均引用正式文献或由附件数据验证，未以 AI 输出作为学术依据。全部数值结果可由随文代码在附件数据上复现。

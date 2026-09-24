@@ -1,0 +1,168 @@
+\subsection{问题三的模型建立与求解}
+
+\subsubsection{模型建立}
+
+\textbf{优化问题。}以问题二的广义标度律式~\eqref{eq:main} 为目标，建立
+\begin{equation}
+\begin{aligned}
+\min_{N,D,Q}\ & L(N,D,Q)\\
+\text{s.t.}\ & 6ND+D\,[g(Q)-g(Q_0)]_{+}+\eta\,N D L_{\mathrm{ctx}}\le C,\qquad Q_0\le Q\le1,
+\end{aligned}
+\label{eq:q3}
+\end{equation}
+其中 $\eta=2\times10^{-4}$。三种单位 token 提质成本函数为：指数型 $g_1=10^7e^{6Q}$，幂函数型 $g_2=5\times10^9Q^4$，对数型 $g_3=2\times10^9\ln(1+10Q)$。基线质量 $Q_0$ 取两个口径：主口径为 $\bp^*$ 加权质量按式~\eqref{eq:qmix} 换算，$Q_0=0.9878$；副口径取网页语料 c4，$Q_0=0.8892$。
+
+\textbf{降维。}三项成本都与 $D$ 成正比，而 $L$ 对 $D$ 严格递减，所以最优时预算约束必取等。记 $\kappa=6+\eta L_{\mathrm{ctx}}$、$\Delta g(Q)=[g(Q)-g(Q_0)]_+$，则
+\begin{equation}
+D(N,Q)=\frac{C}{\kappa N+\Delta g(Q)},
+\label{eq:dsolve}
+\end{equation}
+代回后，式~\eqref{eq:q3} 化为 $(\log N,Q)$ 上的二维\emph{无约束}问题，不需要罚函数。
+
+\textbf{上下文长度的解析临界值。}注意力项与训练项之比为 $\eta L_{\mathrm{ctx}}/6$，二者相等时
+\begin{equation}
+L_{\mathrm{ctx}}^{\mathrm{crit}}=6/\eta=30000 .
+\end{equation}
+在不提质区域，把式~\eqref{eq:nstar} 中的 $6$ 换成 $\kappa$ 即得闭式解 $N^*\propto(C/\kappa)^{\beta/(\alpha+\beta)}$，因此
+\begin{equation}
+N^*(L_{\mathrm{ctx}})\,/\,N^*(2048)=\bigl[(6+2048\eta)/\kappa\bigr]^{0.452}.
+\label{eq:ctxratio}
+\end{equation}
+
+\textbf{结构性转移的定义。}
+\begin{definition}[结构性转移]\label{def:st}
+记 $x^*(C)=(N^*,D^*,Q^*)$ 为预算 $C$ 下的最优解，其 KKT 活跃约束集 $\mathcal A(C)$ 有三种状态：$\{Q\ge Q_0\}$ 活跃（不提质）、内点（部分提质）、$\{Q\le1\}$ 活跃（提满）。若 $\mathcal A(C)$ 在 $C_{\mathrm{crit}}$ 两侧不同，则称预算在 $C_{\mathrm{crit}}$ 处发生\textbf{结构性转移}。
+\end{definition}
+
+在 $Q=Q_0$ 处，“提质的边际收益”与“提质挤占数据的边际损失”之比为
+\begin{equation}
+\Phi(C)=\frac{(k_0+k_1N^{-\alpha})\,(\kappa N+\Delta g)}{\beta B\,D^{-\beta}\,g'(Q)}\Bigg|_{x^*(C)} .
+\label{eq:phi}
+\end{equation}
+$\Phi<1$ 时，不提质就是 KKT 点；$\Phi(C)=1$ 的解就是 $C_{\mathrm{crit}}$，用二分法求得（口径 A）。另设两个辅助口径：口径 B 取提质成本占比 $s_Q$ 的峰值点；口径 C 取 $D^*/N^*$ 的对数斜率偏离常数 $(\alpha-\beta)/(\alpha+\beta)$ 最大的点。
+
+\subsubsection{求解方法}
+
+内层对 $\log N$ 做黄金分割搜索（剖面损失关于 $N$ 单峰），外层对 $Q$ 做三级网格加密，最终步长小于 $10^{-5}$，并对端点 $Q_0$ 与 $1$ 做保护。求解器全向量化（附录 A.2）。求解范围为：3 种 $g$ × 7 档预算（$10^{19}$–$10^{25}$）× 5 档 $L_{\mathrm{ctx}}$（取 C7 中的可行值 2k/4k/8k/32k/128k）× 2 种 $Q_0$，共 210 组。
+
+求解器做两项互验。在 $\Delta g=0$ 的 15 组中，数值解与闭式 $N^*$ 的相对误差不超过 $1.83\times10^{-7}$；与粗网格穷举对比的 18 组中，Loss 差不超过 $1.6\times10^{-5}$，且区制判定一致。稳健性部分对问题二的 500 组 bootstrap 参数逐组重解 $C_{\mathrm{crit}}$，并对 $\eta$ 做 $\pm50\%$ 扰动。
+
+\subsubsection{结果与分析}
+
+\textbf{关键预算下的最优配置。}表~\ref{tab:q3key} 给出主口径、指数型、$L_{\mathrm{ctx}}=2048$ 的结果。$D^*/N^*$ 由 31 升至 97，符合 $\alpha>\beta$ 时“数据增长快于参数”的规律。提质只占很小的成本份额（$<1\%$），却带来最优解的区制变化。
+
+\begin{table}[H]
+\centering\small
+\caption{关键预算下的最优配置（主口径 $Q_0=0.9878$，指数型，$L_{\mathrm{ctx}}=2048$）}
+\label{tab:q3key}
+\begin{tabular}{cccccccl}
+\toprule
+$C$ & $N^*$ & $D^*$ & $Q^*$ & $L^*$ & $D^*/N^*$ & $s_Q$ & 区制 \\
+\midrule
+$10^{19}$ & $2.23\times10^{8}$ & $6.99\times10^{9}$ & $0.9878$ & $3.004$ & $31.3$ & $0$ & 不提质（$Q_0$ 角点） \\
+$10^{22}$ & $5.06\times10^{9}$ & $3.06\times10^{11}$ & $1$ & $2.144$ & $60.4$ & $0.87\%$ & 提满（$Q=1$ 角点） \\
+$10^{24}$ & $4.01\times10^{10}$ & $3.88\times10^{12}$ & $1$ & $1.914$ & $96.7$ & $0.11\%$ & 提满 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+幂函数型结果与表~\ref{tab:q3key} 几乎相同；对数型在 $10^{19}$ 就已提满（$L^*=3.002$）。副口径起点质量更低，提质更划算：$C=10^{22}$ 时，指数型与幂函数型的 $s_Q$ 约为 $5.4\%$，对数型为 $0.65\%$。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{q3_F1_Qstar_vs_C.png}
+\caption{最优质量 $Q^*$ 随预算的变化（三种成本函数，两种 $Q_0$ 口径）}
+\label{fig:q3q}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.82\textwidth]{q3_F2_cost_shares.png}
+\caption{最优解中训练、提质、注意力三项成本的占比}
+\label{fig:q3share}
+\end{figure}
+
+\textbf{结构性转移。}表~\ref{tab:q3crit} 给出三种识别口径下的 $\log_{10}C_{\mathrm{crit}}$。主要发现有三点。
+
+第一，转移几乎是跳变式的“不提质 $\to$ 提满”。主口径下“离开 $Q_0$”与“到达 $Q=1$”几乎重合（2048 档宽度 $\le0.024\dex$），原因是两个质量项对 $Q$ 都是线性的，而 $g(Q)$ 是凸的，最优解倾向落在角点。全部 210 组中有 34 组为 $Q_0$ 角点、3 组为内点，均出现在 $C=10^{19}$ 与 $10^{20}$ 的指数型与幂函数型；副口径指数型存在约 $0.33\dex$ 宽的部分提质区间。
+
+第二，成本函数的形式决定临界点。对数型的 $g'$ 在接近 1 时最小，因此比另两种早约两个数量级开始提质。“是否提质”取决于成本函数的形式，不能一概而论。
+
+第三，识别结果稳健。主口径三种口径的极差不超过 $0.05\dex$；副口径最大为 $0.385\dex$（指数型、$L_{\mathrm{ctx}}=131$k），仍低于事先设定的 $0.5\dex$ 一致性门槛。对问题二的 500 组 bootstrap 参数，主口径指数型 $C_{\mathrm{crit}}$ 的中位数为 $20.610$，90\% 区间为 $[20.594,20.628]$；六种组合的区间宽度都在 $\pm0.03\dex$ 以内，$10^{19}/10^{22}/10^{24}$ 三档的区制判定一致率为 100\%。
+
+\begin{table}[H]
+\centering\small
+\caption{结构性转移临界预算 $\log_{10}C_{\mathrm{crit}}$（$L_{\mathrm{ctx}}=2048$）}
+\label{tab:q3crit}
+\begin{tabular}{llcccccc}
+\toprule
+$Q_0$ 口径 & $g$ & \makecell{A：离开\\$Q_0$} & \makecell{A：到达\\$Q=1$} & \makecell{A：$\Phi=1$\\解析} & \makecell{B：$s_Q$\\峰值} & \makecell{C：$D/N$\\拐点} & 极差 \\
+\midrule
+\multirow{3}{*}{主 0.988} & 指数型 & 20.610 & 20.634 & 20.610 & 20.65 & 20.60 & 0.050 \\
+ & 幂函数型 & 20.483 & 20.483 & 20.486 & 20.50 & 20.45 & 0.050 \\
+ & 对数型 & 18.523 & 18.523 & 18.540 & 18.55 & 18.50 & 0.050 \\
+\midrule
+\multirow{3}{*}{副 0.889} & 指数型 & 20.100 & 20.430 & 20.100 & 20.45 & 20.15 & 0.350 \\
+ & 幂函数型 & 20.199 & 20.250 & 20.199 & 20.25 & 20.20 & 0.051 \\
+ & 对数型 & 18.449 & 18.449 & 18.592 & 18.45 & 18.40 & 0.050 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{q3_F5_three_criteria.png}
+\caption{结构性转移的三种识别口径（主口径）}
+\label{fig:q3three}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{.44\textwidth}\centering
+\includegraphics[width=\linewidth]{q3_F6_phase_Q0.png}
+\caption{$Q_0$–$C$ 相图：$Q_0$ 越低，$C_{\mathrm{crit}}$ 越小，内点区间越宽}
+\label{fig:q3phase}
+\end{minipage}\hfill
+\begin{minipage}{.53\textwidth}\centering
+\includegraphics[width=\linewidth]{q3_F7_ccrit_sensitivity.png}
+\caption{$C_{\mathrm{crit}}$ 对 bootstrap 参数与 $\eta$ 的敏感性}
+\label{fig:q3sens}
+\end{minipage}
+\end{figure}
+
+\textbf{上下文长度的影响。}表~\ref{tab:q3ctx} 显示，数值解与解析式 $[(6+2048\eta)/\kappa]^{0.452}$ 吻合（最大偏差 $0.002$）。32k 档刚好越过 $L_{\mathrm{ctx}}^{\mathrm{crit}}=30000$，注意力成本开始超过一半。长上下文相当于给每个参数加价，最优策略是缩小模型、按比例保留数据。$C_{\mathrm{crit}}$ 随 $L_{\mathrm{ctx}}$ 增大而单调减小（主口径指数型由 $20.61$ 降至 $19.99$），因为每 token 的训练成本变高后，同样的提质开销占比相对变小。$\eta$ 取 $\pm50\%$ 时，2048 档的 $C_{\mathrm{crit}}$ 仅移动约 $\pm0.012\dex$，131k 档移动约 $\pm0.2\dex$。
+
+\begin{table}[H]
+\centering\small
+\caption{上下文长度敏感性（主口径，指数型，$C=10^{22}$）}
+\label{tab:q3ctx}
+\begin{tabular}{rcccccc}
+\toprule
+$L_{\mathrm{ctx}}$ & $\kappa$ & $N^*/N^*_{2048}$ 数值 & $N^*/N^*_{2048}$ 解析 & $L^*$ & 注意力成本占比 \\
+\midrule
+2\,048 & 6.41 & 1.000 & 1.000 & 2.1438 & 6.3\% \\
+4\,096 & 6.82 & 0.972 & 0.972 & 2.1481 & 11.9\% \\
+8\,192 & 7.64 & 0.923 & 0.924 & 2.1562 & 21.3\% \\
+32\,768 & 12.55 & 0.736 & 0.738 & 2.1930 & 51.9\% \\
+131\,072 & 32.21 & 0.480 & 0.482 & 2.2710 & 81.1\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{q3_F4_Lctx_sensitivity.png}
+\caption{$L_{\mathrm{ctx}}$ 对最优规模、$C_{\mathrm{crit}}$ 与成本结构的影响}
+\label{fig:q3ctx}
+\end{figure}
+
+\textbf{配比联立。}把配比也纳入决策，联合目标为 $L_{\mathrm{joint}}=L(N,D,Q)\cdot m(\bp)$。其中 $m(\bp)$ 用问题一求 $\bp^*$ 时的同一组 13 个验证域梯度提升模型计算，并以 $\bp^*$ 处为 1 归一化；提质起点改为 $Q_0(\bp)=\sum_ip_iQ_{\mathrm B,i}$；在 $\bp^*$ 周围做 Dirichlet 采样，共 4000 个候选。结果显示，联合最优相对 $\bp^*$ 可再降 $13.69\%$–$13.78\%$，其中配比效应 $1-m$ 贡献 $13.69\%$，规模与提质通道只贡献 $0.001\%$–$0.105\%$。若取最优前 100 个点的平均，与 $\bp^*$ 的全变差距离为 $0.017$–$0.022$，收益为 $1.0\%$–$2.2\%$，更为稳健。在不同 $(g,C)$ 组合下，4000 个候选的排序秩相关最小为 $0.976$（图~\ref{fig:q3mix}）。因此配比决策与规模/质量决策近似可分离，“先定配比、再定规模”的做法成立。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{q3_F8_mixture_joint.png}
+\caption{配比联立优化：降损来源分解与跨预算排序一致性}
+\label{fig:q3mix}
+\end{figure}
+
+\textbf{对《数据说明》中建议的核对。}说明文档称“$C=10^{22}$ 时 $N^*=1.2\times10^{-3}$B、$D^*=850$B、Loss $=3.41$”。该配置只用掉 $0.06\%$ 的预算，按本文标度律其损失为 $5.361$，而真实最优为 $L^*=2.143$、$N^*\approx5\times10^9$。说明文档称“各档预算 $Q^*=1$，无需比较成本函数”，与上文 34 组 $Q_0$ 角点 + 3 组内点的结果矛盾。说明文档建议“穷举网格 + 罚系数取 1”，但由式~\eqref{eq:dsolve} 可解析消去约束；网格法与本文求解器的 Loss 差虽不超过 $1.6\times10^{-5}$，却无法连续识别 $C_{\mathrm{crit}}$。

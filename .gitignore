@@ -8,6 +8,16 @@
 src/outputs_q1/cache/
 src/outputs_q1/log_step4.txt
 
+# Q2–Q4 可由脚本重新生成的二进制缓存
+src/outputs_q*/cache/
+src/outputs_q3/tables/T1_scan.pkl
+
+# LaTeX 编译中间文件
+*.aux
+*.log
+*.out
+src/final_report/main.pdf
+
 # Python 编译缓存
 __pycache__/
 *.pyc

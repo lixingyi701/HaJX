@@ -1,0 +1,132 @@
+\subsection{问题二的模型建立与求解}
+
+\subsubsection{模型建立}
+
+\textbf{建模思路。}经典标度律只有 $N$ 与 $D$ 两个变量。本文采用\emph{基线 + 质量修正}的结构：先在附件内锚定经典项，再让数据决定质量以何种形式进入。候选形式分两族。第一族是\textbf{加性惩罚族}，质量不足直接抬高损失；第二族是文献常用的\textbf{有效数据乘子族}，低质量数据折算为更少的有效 token\cite{muennighoff}。两族在经济含义上不同：前者意味着低质量带来规模无法弥补的损失，后者意味着多读数据总能弥补质量不足。
+
+\textbf{数据审计与逆向。}B1 可被三参数形式拟合到 $\mathrm{RMSE}=1.5\times10^{-4}$，是公式生成的无噪声锚点。在 B6/B7 的 $N\times D\times Q$ 网格上，残差去除基线后与 $(1-Q)$ 呈线性关系，且斜率随 $N^{-0.34}$ 衰减（图~\ref{fig:q2rev}）。据此逆向得到的生成式为“基线 $+\,(1-Q)(0.19+175N^{-0.34})$”。B8 与 B6/B7 在相同 $(N,D,Q)$ 点上的相关系数为 $-0.03$，语义不同源，因此不参与联合拟合。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.95\textwidth]{q12_F8_reverse_engineering.png}
+\caption{附件 B 的逆向分析：B1 锚点（左）、B6/B7 残差对 $(1-Q)$ 的线性结构（中）、B8 与 B6/B7 的不一致（右）}
+\label{fig:q2rev}
+\end{figure}
+
+\textbf{主模型。}交叉验证选型后（见 5.3.2 节），广义标度律为
+\begin{equation}
+\boxed{\;L(N,D,Q)=E+\widetilde A(Q)\,N^{-\alpha}+B\,D^{-\beta}+(1-Q)\,k_0,\qquad
+\widetilde A(Q)=A+k_1(1-Q)\;}
+\label{eq:main}
+\end{equation}
+$Q=1$ 时式~\eqref{eq:main} 严格退化为经典 Chinchilla 形式\cite{hoffmann}。$k_0$ 项是不随规模衰减的“质量地板”，$k_1$ 项是随 $N^{-\alpha}$ 衰减的“质量—规模交互”。
+
+\textbf{配比的接入。}按赛题要求，问题二不重复读取附件 A，配比只通过问题一的接口进入：
+\begin{equation}
+Q_{\mathrm B}(\bp)=\frac{1}{Q_{\mathrm{ref}}}\sum_{i=1}^{17}p_i\,\hat Q_{d(i)},\qquad Q_{\mathrm{ref}}=\bar Q(\bp_{\mathrm{pile}})=0.5608,
+\label{eq:qmix}
+\end{equation}
+即把配比映射为语料平均质量后代入 $Q$。配比的域结构效应（哪个域帮哪个验证域）由迁移矩阵 $T$ 单独描述。问题一已发现交互系数 $\lambda_v$ 的符号在域间不一致，因此不把质量与配比合并为单一乘子。
+
+\subsubsection{求解方法}
+
+\textbf{两步拟合。}第一步在 B1 上网格搜索 $(\alpha,\beta)$，再以最小二乘确定 $(E,A,B)$，得到 $L_0=1.6901+406.4N^{-0.340}+410.6D^{-0.280}$。第二步固定基线，在 B6/B7 的 450 个点上对五种候选质量项做五折交叉验证（表~\ref{tab:forms}）。参数区间用残差 bootstrap（$B=500$）估计。
+
+\begin{table}[H]
+\centering\small
+\caption{质量项形式选择（五折 cv-RMSE；数据噪声水平 $\sigma\approx0.05$）}
+\label{tab:forms}
+\begin{tabular}{llc}
+\toprule
+候选形式 & 所属族 & cv-RMSE \\
+\midrule
+\textbf{加性 + 规模交互}\ $(1-Q)(k_0+k_1N^{-\alpha})$ & 加性惩罚 & $\mathbf{0.0512}$ \\
+纯加性\ $k(1-Q)$ & 加性惩罚 & $0.0731$ \\
+指数乘子\ $D_{\mathrm{eff}}=De^{-\gamma(1-Q)}$ & 有效数据乘子 & $0.0985$ \\
+线性乘子\ $D_{\mathrm{eff}}=D\,(q_0+(1-q_0)Q)$ & 有效数据乘子 & $0.1030$ \\
+幂律乘子\ $D_{\mathrm{eff}}=DQ^{\gamma}$ & 有效数据乘子 & $0.1050$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+主模型的 cv-RMSE 达到数据噪声水平，而文献偏好的有效数据乘子族全部落败。模型形式由交叉验证裁决，而不是从文献先验借用。
+
+\begin{table}[H]
+\centering\small
+\caption{广义标度律参数估计（括号内为残差 bootstrap 95\% CI）}
+\label{tab:params}
+\begin{tabular}{cccccccc}
+\toprule
+$E$ & $A$ & $\alpha$ & $B$ & $\beta$ & $k_0$ & $k_1$ & 残差 $\sigma$ \\
+\midrule
+$1.6901$ & $406.39$ & $0.34$ & $410.59$ & $0.28$ &
+\makecell{$0.1922$\\ {\footnotesize$[0.175,0.211]$}} & \makecell{$175.29$\\ {\footnotesize$[156.6,193.0]$}} & $0.051$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{结果与分析}
+
+\textbf{跨源检验。}在真实文献点上，主模型预测与观测的 Spearman 相关为：scaling\_baseline（57 点）$0.983$，published（44 点）$0.959$；平均偏差分别为 $0.22$ 与 $0.02$ nats。趋势一致，绝对偏移来自 tokenizer 与验证集差异，符合“跨源只比趋势”的原则。B2（半合成）Spearman 为 $0.788$、偏差为 $1.18$ nats，仅作定性佐证。
+
+\textbf{解析命题。}以下四条命题均由式~\eqref{eq:main} 直接推出，并与数值优化互验：命题~\ref{prop:sub} 为逐点代入，命题~\ref{prop:opt} 与数值最优解的最大相对误差 $<10^{-5}$。
+
+\begin{proposition}[弹性]\label{prop:el}
+损失对三个因素的弹性为
+$\displaystyle
+\varepsilon_N=-\frac{\alpha\widetilde A(Q)N^{-\alpha}}{L},\quad
+\varepsilon_D=-\frac{\beta BD^{-\beta}}{L},\quad
+\varepsilon_Q=-\frac{Q(k_0+k_1N^{-\alpha})}{L}.$
+在 $(N,D,Q)=(10^{10},10^{12},0.9)$ 处三者依次为 $-0.028$、$-0.024$、$-0.115$，即\emph{质量弹性约为规模弹性的 4 倍}。由于 $k_0$ 项不随 $N$ 衰减，规模越大，质量的相对优势越明显。
+\end{proposition}
+
+\begin{proposition}[质量—参数等效替代及其边界]\label{prop:sub}
+固定 $D$，使 $L(N',D,Q)=L(N,D,Q+\delta)$ 成立的等效参数量为
+\begin{equation}
+N'=N\Bigl[1-\frac{\delta\,(k_0+k_1N^{-\alpha})}{\widetilde A(Q)N^{-\alpha}}\Bigr]^{-1/\alpha},
+\end{equation}
+当且仅当括号内为正时有限。质量从 $0.9$ 提高到 $1.0$，在 $N=10^9$ 处等效于参数扩大 $1.33$ 倍，在 $N=10^{10}$ 处等效于扩大 $1.64$ 倍（bootstrap 区间 $[1.52,1.77]$）。同一份质量改进，模型越大价值越高；超过临界规模后，任何有限的扩参都无法替代这次质量提升。这就是“质量与规模可相互替代”的条件。
+\end{proposition}
+
+\begin{proposition}[质量地板]\label{prop:fl}
+$\lim_{N,D\to\infty}L=E+(1-Q)k_0$。低质量会带来规模无法弥补的损失下界：$Q=0.5$ 的地板比 $Q=1$ 高 $0.096$ nats。这为问题三的“付费提质”提供了理论依据。
+\end{proposition}
+
+\begin{proposition}[算力最优配置随质量移动]\label{prop:opt}
+在约束 $6ND=C$ 下，
+\begin{equation}
+N^{*}(C,Q)=\Bigl[\frac{\alpha\widetilde A(Q)}{\beta B}\Bigr]^{\frac{1}{\alpha+\beta}}
+\Bigl(\frac{C}{6}\Bigr)^{\frac{\beta}{\alpha+\beta}},\qquad \frac{\beta}{\alpha+\beta}=0.452,
+\qquad \frac{\partial N^{*}}{\partial Q}<0 .
+\label{eq:nstar}
+\end{equation}
+质量越高，最优配置越偏向“小模型、多数据”：$C=10^{22}$ 时，最优 token/参数比由 $Q=0.3$ 时的 27 升至 $Q=1$ 时的 63。其机制是低质量数据抬高了 $\widetilde A(Q)$，相当于提高了参数的边际收益。这一命题是问题三结构性转移的机制来源。
+\end{proposition}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{q12_F21_theory.png}
+\caption{解析理论三联图：等损失线（左）、等效参数倍数（中）、$N^*(C,Q)$（右）}
+\label{fig:theory}
+\end{figure}
+
+\textbf{领域间的替代与互补。}广义律中的配比通道由两部分组成。第一部分是 $Q_{\mathrm B}(\bp)$：把质量高的域（arxiv、stackexchange）换入，会通过 $(1-Q)$ 两项同时降损。第二部分是迁移矩阵 $T$（表~\ref{tab:q2tm}）：13 个自域效应全部为负，说明各域“自己补自己”最有效；非对角的负值对应\textbf{互补}，最典型的是 github 与 stackexchange 双向互补（$-0.21/-0.32$），pubmed\_central 与 pubmed\_abstracts 双向互补（$-0.16/-0.11$），pile\_cc 增配也会降低 wikipedia 的损失（$-0.11$）；正值对应\textbf{替代}（挤占），最典型的是 dm\_mathematics 列除 ubuntu\_irc 外全为正（$0.04$–$0.50$），即几乎任何其他域的增配都会挤占数学能力，enron\_emails 增配则使全部 13 个验证域的损失上升。第二部分主导配比效应，这一点在问题三的联立优化中得到印证（5.4.3 节）：联合降损几乎全部来自配比结构，而不是 $Q_{\mathrm B}(\bp)$ 通道。
+
+\begin{table}[H]
+\centering\small
+\caption{迁移矩阵 $T_{iv}$ 中的代表性互补与替代关系（节选）}
+\label{tab:q2tm}
+\begin{tabular}{llcl}
+\toprule
+增配域 $i$ & 验证域 $v$ & $T_{iv}$ & 关系 \\
+\midrule
+stackexchange & github & $-0.32$ & 互补（问答 $\to$ 代码） \\
+github & stackexchange & $-0.21$ & 互补（代码 $\to$ 问答） \\
+pubmed\_central & pubmed\_abstracts & $-0.16$ & 互补（全文 $\to$ 摘要） \\
+stackexchange & arxiv & $-0.15$ & 互补 \\
+pile\_cc & wikipedia\_en & $-0.11$ & 互补（网页 $\to$ 百科） \\
+enron\_emails & dm\_mathematics & $+0.50$ & 替代（挤占） \\
+pile\_cc & dm\_mathematics & $+0.26$ & 替代（挤占） \\
+\bottomrule
+\end{tabular}
+\end{table}

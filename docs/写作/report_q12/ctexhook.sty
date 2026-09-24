@@ -1,0 +1,14 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{ctexhook}[2020/01/01 v0.0 shim]
+\RequirePackage{expl3}
+\ExplSyntaxOn
+\cs_new_protected:Npn \ctex_disable_package:n #1 { }
+\cs_new_protected:Npn \ctex_replace_package:nn #1#2 { }
+\cs_new_protected:Npn \ctex_at_begin_package:nn #1#2 { }
+\cs_new_protected:Npn \ctex_at_end_package:nn #1#2 { }
+\cs_new_protected:Npn \ctex_at_end_preamble:n #1 { \AtBeginDocument {#1} }
+\cs_new_protected:Npn \ctex_after_end_preamble:n #1 { \AtBeginDocument {#1} }
+\prg_new_conditional:Npnn \ctex_if_format_at_least:n #1 { T , F , TF }
+  { \prg_return_true: }
+\ExplSyntaxOff
+\endinput
