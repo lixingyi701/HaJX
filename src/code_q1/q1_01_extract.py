@@ -14,7 +14,20 @@ def extract(path, tag, domain=None):
     t0 = time.time()
     rows, doms, wcs = [], [], []
     for row, d, _ in stream_jsonl_xz(path, domain=domain):
-        rows.append([row[c] for c in IND_COLS])
+        # ===== P2修复: DSIR归一化 (2026-09-24 重新修复) =====
+        # DSIR指标必须在提取时就归一化,除以word_count变为"单位词的质量分"
+        # 否则DSIR与文档长度高度相关(ρ=0.54~0.56),导致虚假冲突率
+        wc = max(row.get("rps_doc_word_count", 1), 1)  # 防止除零
+        row_values = []
+        for c in IND_COLS:
+            val = row[c]
+            # 对DSIR三个指标进行归一化
+            if c in ["dsir_books", "dsir_wiki", "dsir_math"]:
+                val = val / wc
+            row_values.append(val)
+        rows.append(row_values)
+        # ===== P2修复结束 =====
+
         doms.append(d)
         wcs.append(row["rps_doc_word_count"])
         if len(rows) % 50000 == 0:
@@ -22,6 +35,7 @@ def extract(path, tag, domain=None):
     df = pd.DataFrame(rows, columns=IND_COLS)
     df["domain"] = doms
     df["dataset"] = tag
+
     out = f"{CACHE}/{tag}_indicators.pkl"
     df.to_pickle(out)
     print(f"[{tag}] {len(df)} rows -> {out}  ({time.time()-t0:.0f}s)", flush=True)

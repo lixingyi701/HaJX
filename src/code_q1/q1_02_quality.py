@@ -25,6 +25,8 @@ class QualityPipeline:
         self.params = {}          # 每域每指标: winsor 端点/单峰中位数/minmax 锚点
         self.critic_w = None
         self.global_params = {}
+        self.dsir_resid_params = {}  # P2修复: DSIR对log(wc)的残差化参数
+        self.conflict_thresholds = {}  # P1修复B1: DSIR组与规则型组的冲突阈值(P25/P75)
 
     # -- step A: 单峰化 + 方向统一 + 缩尾（域内） --
     def _transform_one(self, x, ind, dom, fit):
@@ -64,11 +66,31 @@ class QualityPipeline:
     def transform(self, df, fit=False):
         """df 需含 IND_COLS + domain；返回 [0,1] 的 25 维标准化矩阵 Z"""
         Z = np.full((len(df), len(IND_COLS)), np.nan)
+        _DSIR_COLS = {"dsir_books", "dsir_wiki", "dsir_math"}
         for dom, sub in df.groupby("domain"):
             idx = sub.index.to_numpy()
             pos = df.index.get_indexer(idx)
+            # P2修复: 域内对log(word_count)做OLS残差化，消除DSIR与文档长度的线性相关
+            wc_log = np.log1p(sub["rps_doc_word_count"].to_numpy())
+            dsir_residualized = {}
+            for dsir_col in _DSIR_COLS:
+                vals = sub[dsir_col].to_numpy()
+                rkey = (dom, dsir_col)
+                if fit:
+                    mask = ~(np.isnan(vals) | np.isnan(wc_log))
+                    if mask.sum() > 10:
+                        X = np.column_stack([np.ones(mask.sum()), wc_log[mask]])
+                        beta, *_ = np.linalg.lstsq(X, vals[mask], rcond=None)
+                    else:
+                        beta = np.array([0.0, 0.0])
+                    self.dsir_resid_params[rkey] = beta
+                else:
+                    beta = self.dsir_resid_params.get(rkey, np.array([0.0, 0.0]))
+                pred = beta[0] + beta[1] * wc_log
+                dsir_residualized[dsir_col] = vals - pred
             for j, ind in enumerate(IND_COLS):
-                Z[pos, j] = self._transform_one(sub[ind].to_numpy(), ind, dom, fit)
+                arr = dsir_residualized[ind] if ind in _DSIR_COLS else sub[ind].to_numpy()
+                Z[pos, j] = self._transform_one(arr, ind, dom, fit)
         # 缺失以域内中位数填补（评分需完整向量）
         for j in range(Z.shape[1]):
             col = Z[:, j]
@@ -84,10 +106,49 @@ class QualityPipeline:
         self.critic_w = C / C.sum()
         return self.critic_w
 
-    # -- step C: 加权几何平均 --
+    # -- step B2: P1修复 — 冲突阈值（仅在A1上拟合，冻结后A2/A3复用） --
+    def fit_conflict_thresholds(self, Z):
+        """
+        在标准化矩阵Z上计算DSIR组和规则型组的P25/P75阈值。
+        用行均值代表各组得分，阈值基于A1全体样本。
+        """
+        from q1_00_common import IND_COLS, GROUPS
+        dsir_idx = [IND_COLS.index(c) for c in GROUPS["G2_DSIR"]]
+        rule_idx = [IND_COLS.index(c) for c in GROUPS["G1_规则型"]]
+        dsir_scores = Z[:, dsir_idx].mean(axis=1)
+        rule_scores = Z[:, rule_idx].mean(axis=1)
+        self.conflict_thresholds = {
+            "dsir_idx": dsir_idx,
+            "rule_idx": rule_idx,
+            "dsir_p25": float(np.nanpercentile(dsir_scores, 25)),
+            "dsir_p75": float(np.nanpercentile(dsir_scores, 75)),
+            "rule_p25": float(np.nanpercentile(rule_scores, 25)),
+            "rule_p75": float(np.nanpercentile(rule_scores, 75)),
+        }
+        return self.conflict_thresholds
+
+    # -- step C: 条件降权 + 加权几何平均（B1方案） --
     def score(self, Z, w=None):
         w = self.critic_w if w is None else w
-        return np.exp((w[None, :] * np.log(np.clip(Z, EPS, 1))).sum(axis=1))
+        ct = self.conflict_thresholds
+        # 无冲突阈值时退化为原始几何平均（兼容旧pickle）
+        if not ct:
+            return np.exp((w[None, :] * np.log(np.clip(Z, EPS, 1))).sum(axis=1))
+        dsir_idx = ct["dsir_idx"]
+        rule_idx = ct["rule_idx"]
+        dsir_scores = Z[:, dsir_idx].mean(axis=1)
+        rule_scores = Z[:, rule_idx].mean(axis=1)
+        # 每行独立权重矩阵（初始为广播的基础权重）
+        W = np.tile(w, (len(Z), 1))   # shape (n, 25)
+        # 冲突类型1: DSIR高 × 规则型低 → 规则型指标降权0.5
+        mask1 = (dsir_scores > ct["dsir_p75"]) & (rule_scores < ct["rule_p25"])
+        W[np.ix_(mask1, rule_idx)] *= 0.5
+        # 冲突类型2: 规则型高 × DSIR低 → DSIR指标降权0.5
+        mask2 = (rule_scores > ct["rule_p75"]) & (dsir_scores < ct["dsir_p25"])
+        W[np.ix_(mask2, dsir_idx)] *= 0.5
+        # 行归一化，使权重和仍为1
+        W = W / W.sum(axis=1, keepdims=True)
+        return np.exp((W * np.log(np.clip(Z, EPS, 1))).sum(axis=1))
 
 # ---------- 对照方法（传统数模组） ----------
 def pca_score(Z, var_target=0.80):
@@ -144,6 +205,20 @@ if __name__ == "__main__":
     Z1 = pipe.transform(A1, fit=True)
     w = pipe.fit_critic(Z1)
     pd.Series(w, index=IND_COLS, name="critic_weight").to_csv(f"{TABLES}/T2_critic_weights.csv")
+
+    # P1修复B1: 拟合冲突阈值（仅在A1上，冻结后A2/A3复用）
+    ct = pipe.fit_conflict_thresholds(Z1)
+    pd.Series({k: v for k, v in ct.items() if not isinstance(v, list)},
+              name="conflict_threshold").to_csv(f"{TABLES}/T2_conflict_thresholds.csv")
+    print("P1冲突阈值:", {k: round(v, 4) for k, v in ct.items() if not isinstance(v, list)})
+    # 统计A1中冲突文档数
+    from q1_00_common import GROUPS
+    dsir_idx = ct["dsir_idx"]; rule_idx = ct["rule_idx"]
+    dsir_s1 = Z1[:, dsir_idx].mean(axis=1); rule_s1 = Z1[:, rule_idx].mean(axis=1)
+    n_type1 = int(((dsir_s1 > ct["dsir_p75"]) & (rule_s1 < ct["rule_p25"])).sum())
+    n_type2 = int(((rule_s1 > ct["rule_p75"]) & (dsir_s1 < ct["dsir_p25"])).sum())
+    print(f"A1冲突文档: 类型1(DSIR高×规则低)={n_type1}({n_type1/len(Z1):.1%}), "
+          f"类型2(规则高×DSIR低)={n_type2}({n_type2/len(Z1):.1%})")
 
     # ---- 主线 Q 与对照 ----
     Q1 = pipe.score(Z1)

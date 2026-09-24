@@ -125,6 +125,59 @@ if __name__ == "__main__":
     np.savez_compressed(f"{CACHE}/step6_scale.npz",
                         a_hat=a_hat, rho_hat=rho_hat)
 
+    # ---- ④ P4修复: GBDT跨尺度验证补充 (2026-09-24) ----
+    # 补充非线性模型(GBDT)的跨尺度验证,检查外推稳健性
+    print("\n==== P4补充: GBDT跨尺度验证 ====")
+    import pickle
+    from q1_00_common import gbdt_fit, gbdt_predict
+
+    # 加载1M训练的GBDT模型
+    with open(f"{CACHE}/step5_gbdt.pkl", "rb") as f:
+        gb_1m = pickle.load(f)
+
+    # 在三尺度上分别重新训练GBDT
+    gbdt_rows = []
+    gb_by_scale = {"1M_heldout": gb_1m}
+
+    for tag in ["60M", "1B"]:
+        P, Y, Z = per_scale_data[tag]
+        lnY = np.log(Y)
+        # 在该尺度上重新训练GBDT
+        gb_by_scale[tag] = [gbdt_fit(Z, lnY[:, v], n_trees=250, lr=0.06)
+                           for v in range(len(DOM13))]
+
+    # 交叉预测: 1M模型预测60M/1B数据
+    for test_tag in ["60M", "1B"]:
+        P_test, Y_test, Z_test = per_scale_data[test_tag]
+
+        # 用1M模型预测
+        Yh_1m = np.stack([gbdt_predict(gb_1m[v], Z_test) for v in range(len(DOM13))], 1)
+        Yh_1m = np.exp(Yh_1m)
+
+        # 用该尺度自己的模型预测
+        Yh_self = np.stack([gbdt_predict(gb_by_scale[test_tag][v], Z_test)
+                           for v in range(len(DOM13))], 1)
+        Yh_self = np.exp(Yh_self)
+
+        Lt_test = Y_test @ w_eval
+        gbdt_rows.append(dict(
+            test_scale=test_tag,
+            model="1M_GBDT",
+            spearman_target=spearman(Lt_test, Yh_1m @ w_eval),
+            MAE_target=mae(Lt_test, Yh_1m @ w_eval)))
+        gbdt_rows.append(dict(
+            test_scale=test_tag,
+            model=f"{test_tag}_GBDT_self",
+            spearman_target=spearman(Lt_test, Yh_self @ w_eval),
+            MAE_target=mae(Lt_test, Yh_self @ w_eval)))
+
+    gbdt_tab = pd.DataFrame(gbdt_rows)
+    gbdt_tab.to_csv(f"{TABLES}/T6_gbdt_cross_scale.csv", index=False)
+    print("GBDT跨尺度验证结果:")
+    print(gbdt_tab.round(4).to_string(index=False))
+    print("==== P4补充完成 ====\n")
+    # ---- P4修复结束 ----
+
     # ---- 图：排名保持衰减曲线 ----
     plt = setup_cjk_matplotlib()
     fig, ax = plt.subplots(figsize=(7, 4.2))

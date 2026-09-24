@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 # ---------------- 路径 ----------------
-ROOT = "/sessions/gifted-quirky-euler/mnt/HaJX-main"
+ROOT = "/sessions/dazzling-wizardly-clarke/mnt/version1"
 A_DIR = f"{ROOT}/real_attachments/A_data_value"
 OUT = f"{ROOT}/outputs_q1"
 CACHE = f"{OUT}/cache"
