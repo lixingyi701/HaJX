@@ -8,8 +8,9 @@ import numpy as np
 import pandas as pd
 
 # ---------------- 路径 ----------------
-ROOT = "/sessions/dazzling-wizardly-clarke/mnt/version1"
-A_DIR = f"{ROOT}/real_attachments/A_data_value"
+from pathlib import Path
+ROOT = str(Path(__file__).resolve().parents[1])  # src: 所有代码和 outputs_q* 的共同父目录
+A_DIR = str(Path(ROOT).parent / "附件" / "A_data_value")
 OUT = f"{ROOT}/outputs_q1"
 CACHE = f"{OUT}/cache"
 TABLES = f"{OUT}/tables"
@@ -277,7 +278,7 @@ def setup_cjk_matplotlib():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    plt.rcParams["font.family"] = ["Noto Sans CJK JP", "sans-serif"]
+    plt.rcParams["font.family"] = ["Hiragino Sans GB", "Arial Unicode MS", "sans-serif"]
     plt.rcParams["axes.unicode_minus"] = False
     plt.rcParams["figure.dpi"] = 130
     return plt

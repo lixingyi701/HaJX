@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 q1_02_quality.py — Step2：质量评分 Q
-主线：域内标准化 + CRITIC 客观赋权 + 加权几何平均（针对 SQ1：跨域可比的连续质量分）
-对照：等权、PCA（载荷可解释）、TOPSIS、K-means 聚类（传统数模方法组）
+主线：域内标准化 + CRITIC 客观赋权 + 加权 Huber 中心估计。
+对照：CRITIC 加权算术平均、PCA、TOPSIS、K-means。
 硬规则：
-  - 所有变换参数（缩尾端点、MinMax 锚点、单峰化中位数、CRITIC 权重）一律在 A1 上估计后冻结，
+  - 所有变换参数（缩尾端点、MinMax 锚点、单峰化中位数、填补值、CRITIC 权重、delta）在 A1 上估计后冻结，
     A2/A3 用同一套参数复算 —— 否则"管线差异"混进"抽样偏差"（提示词 §2.5）。
   - 域内标准化针对 DSIR 跨域不可比与域基线差（提示词 §1、§2.3）。
 """
@@ -17,7 +17,31 @@ from q1_00_common import (CACHE, TABLES, IFACE, IND_COLS, DIRECTION, GROUPS,
                           cohens_d, setup_cjk_matplotlib, FIGS)
 
 RNG = np.random.default_rng(2026)
-EPS = 1e-3  # 几何平均零保护
+
+def weighted_median(Z, w):
+    order = np.argsort(Z, axis=1)
+    sorted_z = np.take_along_axis(Z, order, axis=1)
+    sorted_w = np.broadcast_to(w, Z.shape)
+    sorted_w = np.take_along_axis(sorted_w, order, axis=1)
+    k = (np.cumsum(sorted_w, axis=1) >= sorted_w.sum(axis=1, keepdims=True) / 2).argmax(axis=1)
+    return sorted_z[np.arange(len(Z)), k]
+
+def weighted_huber_center(Z, w, delta, chunk=20000, iterations=28):
+    """对每行在 [0,1] 解 sum_j w_j clip(q-z_j,-delta,delta)=0。"""
+    if not 0 < delta <= 1:
+        raise ValueError("Huber delta must be in (0,1]")
+    result = np.empty(len(Z))
+    for start in range(0, len(Z), chunk):
+        z = Z[start:start+chunk]
+        wc = w[start:start+chunk] if np.ndim(w) == 2 else w
+        lo = np.zeros(len(z)); hi = np.ones(len(z))
+        for _ in range(iterations):
+            mid = (lo + hi) / 2
+            grad = (np.clip(mid[:, None] - z, -delta, delta) * wc).sum(axis=1)
+            lo = np.where(grad < 0, mid, lo)
+            hi = np.where(grad >= 0, mid, hi)
+        result[start:start+chunk] = (lo + hi) / 2
+    return result
 
 # ---------- 变换管线（参数在 A1 上拟合，冻结后应用于 A2/A3） ----------
 class QualityPipeline:
@@ -26,7 +50,8 @@ class QualityPipeline:
         self.critic_w = None
         self.global_params = {}
         self.dsir_resid_params = {}  # P2修复: DSIR对log(wc)的残差化参数
-        self.conflict_thresholds = {}  # P1修复B1: DSIR组与规则型组的冲突阈值(P25/P75)
+        self.impute_medians = {}  # A1 域内缺失填充值
+        self.delta = None
 
     # -- step A: 单峰化 + 方向统一 + 缩尾（域内） --
     def _transform_one(self, x, ind, dom, fit):
@@ -36,15 +61,15 @@ class QualityPipeline:
         if fit:
             p = {}
             if d == 0:  # 适宜区间型：log1p 后取距域内中位数偏离
-                xl = np.log1p(np.clip(x, 0, None)) if x.min() >= 0 else x
+                xl = np.log1p(np.clip(x, 0, None)) if np.nanmin(x) >= 0 else x
                 med = np.nanmedian(xl)
                 v = -np.abs(xl - med)          # 越接近中位数越好
-                p["log"] = x.min() >= 0; p["med"] = med
+                p["log"] = np.nanmin(x) >= 0; p["med"] = med
             else:
                 heavy = ind.startswith("dsir") or ind in ("rps_doc_word_count", "rps_doc_num_sentences")
-                xl = np.log1p(np.clip(x, 0, None)) if (heavy and x.min() >= 0) else x
+                xl = np.log1p(np.clip(x, 0, None)) if (heavy and np.nanmin(x) >= 0) else x
                 v = xl if d == 1 else -xl
-                p["log"] = heavy and x.min() >= 0
+                p["log"] = heavy and np.nanmin(x) >= 0
             v, wz = winsorize(v)
             v, mm = minmax(v)
             p["winsor"] = wz; p["mm"] = mm
@@ -70,7 +95,7 @@ class QualityPipeline:
         for dom, sub in df.groupby("domain"):
             idx = sub.index.to_numpy()
             pos = df.index.get_indexer(idx)
-            # P2修复: 域内对log(word_count)做OLS残差化，消除DSIR与文档长度的线性相关
+            # DSIR 测量校正：域内对 log(word_count) 残差化，与冲突类型无关。
             wc_log = np.log1p(sub["rps_doc_word_count"].to_numpy())
             dsir_residualized = {}
             for dsir_col in _DSIR_COLS:
@@ -91,11 +116,13 @@ class QualityPipeline:
             for j, ind in enumerate(IND_COLS):
                 arr = dsir_residualized[ind] if ind in _DSIR_COLS else sub[ind].to_numpy()
                 Z[pos, j] = self._transform_one(arr, ind, dom, fit)
-        # 缺失以域内中位数填补（评分需完整向量）
-        for j in range(Z.shape[1]):
-            col = Z[:, j]
-            if np.isnan(col).any():
-                col[np.isnan(col)] = np.nanmedian(col)
+            for j, ind in enumerate(IND_COLS):
+                key = (dom, ind)
+                if fit:
+                    self.impute_medians[key] = float(np.nanmedian(Z[pos, j]))
+                fill = self.impute_medians.get(key, .5)
+                missing = np.isnan(Z[pos, j])
+                Z[pos[missing], j] = fill
         return Z
 
     # -- step B: CRITIC 权重（A1 全体样本上估计一次） --
@@ -106,49 +133,16 @@ class QualityPipeline:
         self.critic_w = C / C.sum()
         return self.critic_w
 
-    # -- step B2: P1修复 — 冲突阈值（仅在A1上拟合，冻结后A2/A3复用） --
-    def fit_conflict_thresholds(self, Z):
-        """
-        在标准化矩阵Z上计算DSIR组和规则型组的P25/P75阈值。
-        用行均值代表各组得分，阈值基于A1全体样本。
-        """
-        from q1_00_common import IND_COLS, GROUPS
-        dsir_idx = [IND_COLS.index(c) for c in GROUPS["G2_DSIR"]]
-        rule_idx = [IND_COLS.index(c) for c in GROUPS["G1_规则型"]]
-        dsir_scores = Z[:, dsir_idx].mean(axis=1)
-        rule_scores = Z[:, rule_idx].mean(axis=1)
-        self.conflict_thresholds = {
-            "dsir_idx": dsir_idx,
-            "rule_idx": rule_idx,
-            "dsir_p25": float(np.nanpercentile(dsir_scores, 25)),
-            "dsir_p75": float(np.nanpercentile(dsir_scores, 75)),
-            "rule_p25": float(np.nanpercentile(rule_scores, 25)),
-            "rule_p75": float(np.nanpercentile(rule_scores, 75)),
-        }
-        return self.conflict_thresholds
+    def fit_delta(self, Z):
+        """A1 上的稳健尺度规则：1.345 × 1.4826 × 逐篇加权 MAD 的中位数。"""
+        center = weighted_median(Z, self.critic_w)
+        dev = np.abs(Z - center[:, None])
+        mad = weighted_median(dev, self.critic_w)
+        self.delta = float(np.clip(1.345 * 1.4826 * np.median(mad), .01, 1.0))
+        return self.delta
 
-    # -- step C: 条件降权 + 加权几何平均（B1方案） --
-    def score(self, Z, w=None):
-        w = self.critic_w if w is None else w
-        ct = self.conflict_thresholds
-        # 无冲突阈值时退化为原始几何平均（兼容旧pickle）
-        if not ct:
-            return np.exp((w[None, :] * np.log(np.clip(Z, EPS, 1))).sum(axis=1))
-        dsir_idx = ct["dsir_idx"]
-        rule_idx = ct["rule_idx"]
-        dsir_scores = Z[:, dsir_idx].mean(axis=1)
-        rule_scores = Z[:, rule_idx].mean(axis=1)
-        # 每行独立权重矩阵（初始为广播的基础权重）
-        W = np.tile(w, (len(Z), 1))   # shape (n, 25)
-        # 冲突类型1: DSIR高 × 规则型低 → 规则型指标降权0.5
-        mask1 = (dsir_scores > ct["dsir_p75"]) & (rule_scores < ct["rule_p25"])
-        W[np.ix_(mask1, rule_idx)] *= 0.5
-        # 冲突类型2: 规则型高 × DSIR低 → DSIR指标降权0.5
-        mask2 = (rule_scores > ct["rule_p75"]) & (dsir_scores < ct["dsir_p25"])
-        W[np.ix_(mask2, dsir_idx)] *= 0.5
-        # 行归一化，使权重和仍为1
-        W = W / W.sum(axis=1, keepdims=True)
-        return np.exp((W * np.log(np.clip(Z, EPS, 1))).sum(axis=1))
+    def score(self, Z):
+        return weighted_huber_center(Z, self.critic_w, self.delta)
 
 # ---------- 对照方法（传统数模组） ----------
 def pca_score(Z, var_target=0.80):
@@ -190,12 +184,20 @@ def kmeans(Z, k=3, iters=100, seed=0):
     return lab, C
 
 def bootstrap_ci(x, stat=np.median, B=2000, alpha=0.05, rng=RNG):
-    n = len(x); idx = rng.integers(0, n, size=(B, n))
-    s = np.array([stat(x[i]) for i in idx])
+    n = len(x)
+    batch = max(1, min(B, 2_000_000 // n))
+    values = []
+    for start in range(0, B, batch):
+        idx = rng.integers(0, n, size=(min(batch, B-start), n))
+        values.extend(stat(x[i]) for i in idx)
+    s = np.asarray(values)
     return float(np.quantile(s, alpha/2)), float(np.quantile(s, 1-alpha/2))
 
 # =====================================================================
 if __name__ == "__main__":
+    # pickle 保存可从模块路径重新加载的类，而非只在脚本 __main__ 中存在的类。
+    sys.modules["q1_02_quality"] = sys.modules[__name__]
+    QualityPipeline.__module__ = "q1_02_quality"
     os.makedirs(TABLES, exist_ok=True); os.makedirs(IFACE, exist_ok=True)
     A1 = pd.read_pickle(f"{CACHE}/A1_indicators.pkl")
     A2 = pd.read_pickle(f"{CACHE}/A2_indicators.pkl")
@@ -206,23 +208,30 @@ if __name__ == "__main__":
     w = pipe.fit_critic(Z1)
     pd.Series(w, index=IND_COLS, name="critic_weight").to_csv(f"{TABLES}/T2_critic_weights.csv")
 
-    # P1修复B1: 拟合冲突阈值（仅在A1上，冻结后A2/A3复用）
-    ct = pipe.fit_conflict_thresholds(Z1)
-    pd.Series({k: v for k, v in ct.items() if not isinstance(v, list)},
-              name="conflict_threshold").to_csv(f"{TABLES}/T2_conflict_thresholds.csv")
-    print("P1冲突阈值:", {k: round(v, 4) for k, v in ct.items() if not isinstance(v, list)})
-    # 统计A1中冲突文档数
-    from q1_00_common import GROUPS
-    dsir_idx = ct["dsir_idx"]; rule_idx = ct["rule_idx"]
-    dsir_s1 = Z1[:, dsir_idx].mean(axis=1); rule_s1 = Z1[:, rule_idx].mean(axis=1)
-    n_type1 = int(((dsir_s1 > ct["dsir_p75"]) & (rule_s1 < ct["rule_p25"])).sum())
-    n_type2 = int(((rule_s1 > ct["rule_p75"]) & (dsir_s1 < ct["dsir_p25"])).sum())
-    print(f"A1冲突文档: 类型1(DSIR高×规则低)={n_type1}({n_type1/len(Z1):.1%}), "
-          f"类型2(规则高×DSIR低)={n_type2}({n_type2/len(Z1):.1%})")
+    delta = pipe.fit_delta(Z1)
+    pd.DataFrame([{"dataset":"A1", "delta":delta,
+                   "rule":"1.345 × 1.4826 × median_x weighted-MAD_j(z_j(x))"}]
+                 ).to_csv(f"{TABLES}/T2_delta_selection.csv", index=False)
+    print(f"A1 冻结 Huber delta={delta:.6f}")
+
+    # DSIR 是测量预处理诊断，不根据冲突类型更改任何评分权重。
+    dsir_rows = []
+    for dom, sub in A1.groupby("domain"):
+        wc = np.maximum(sub["rps_doc_word_count"].to_numpy(dtype=float), 1)
+        wc_log = np.log1p(wc)
+        for ind in ("dsir_books", "dsir_wiki", "dsir_math"):
+            perword = sub[ind].to_numpy(dtype=float)
+            beta = pipe.dsir_resid_params[(dom, ind)]
+            residual = perword - beta[0] - beta[1] * wc_log
+            dsir_rows.append(dict(domain=dom, indicator=ind, n=len(sub),
+                                  rho_raw_vs_wc=spearman(perword * wc, wc),
+                                  rho_perword_vs_wc=spearman(perword, wc),
+                                  rho_residual_vs_wc=spearman(residual, wc)))
+    pd.DataFrame(dsir_rows).to_csv(f"{TABLES}/T2_dsir_length_diagnostic.csv", index=False)
 
     # ---- 主线 Q 与对照 ----
     Q1 = pipe.score(Z1)
-    Q1_eq = pipe.score(Z1, w=np.full(25, 1/25))
+    Q1_mean = Z1 @ w
     Q1_pca, load, ratio, m = pca_score(Z1)
     Q1_top = topsis(Z1, w)
     lab, cent = kmeans(Z1, k=3, seed=42)
@@ -232,9 +241,9 @@ if __name__ == "__main__":
     lab_named = np.select([lab == order[0], lab == order[1], lab == order[2]],
                           ["优质", "普通", "劣质"], default="普通")
     corr = {
-        "CRITIC几何 vs 等权几何": spearman(Q1, Q1_eq),
-        "CRITIC几何 vs PCA": spearman(Q1, Q1_pca),
-        "CRITIC几何 vs TOPSIS": spearman(Q1, Q1_top),
+        "CRITIC-Huber vs CRITIC算术均值": spearman(Q1, Q1_mean),
+        "CRITIC-Huber vs PCA": spearman(Q1, Q1_pca),
+        "CRITIC-Huber vs TOPSIS": spearman(Q1, Q1_top),
     }
     pd.Series(corr, name="Spearman").to_csv(f"{TABLES}/T2_method_agreement.csv")
     pd.DataFrame(load, index=IND_COLS,
@@ -243,6 +252,29 @@ if __name__ == "__main__":
     print("方法一致性:", {k: round(v, 4) for k, v in corr.items()})
     print(f"PCA 取 {m} 个主成分, 累积方差 {ratio.sum():.1%}")
     print("K-means 三档占比:", pd.Series(lab_named).value_counts(normalize=True).round(3).to_dict())
+
+    # 只改变每篇距离其中位数最远的一个指标，衡量少数极端指标的实际影响。
+    med = weighted_median(Z1, w)
+    extreme_j = np.abs(Z1 - med[:, None]).argmax(axis=1)
+    W_loo = np.broadcast_to(w, Z1.shape).copy()
+    W_loo[np.arange(len(Z1)), extreme_j] = 0
+    W_loo /= W_loo.sum(axis=1, keepdims=True)
+    # weighted_huber_center 支持每篇独立权重矩阵（与原主评分同一求解器）。
+    Q1_leave = weighted_huber_center(Z1, W_loo, delta)
+    Q1_mean_leave = (Z1 * W_loo).sum(axis=1)
+    extremeness = np.abs(Z1[np.arange(len(Z1)), extreme_j] - med)
+    extreme_cut = float(np.quantile(extremeness, .9))
+    influence_rows = []
+    for group, mask in [("A1_all", np.ones(len(Z1), dtype=bool)),
+                        ("A1_extreme_top10pct", extremeness >= extreme_cut)]:
+        for method, base, leave in [("Huber", Q1, Q1_leave),
+                                    ("CRITIC_arithmetic", Q1_mean, Q1_mean_leave)]:
+            diff = np.abs(base[mask] - leave[mask])
+            influence_rows.append(dict(group=group, method=method, n=int(mask.sum()),
+                                       extreme_cut=extreme_cut,
+                                       median_abs_change=float(np.median(diff)),
+                                       p90_abs_change=float(np.quantile(diff, .9))))
+    pd.DataFrame(influence_rows).to_csv(f"{TABLES}/T2_extreme_influence.csv", index=False)
 
     # ---- 同一冻结管线跑 A2/A3 ----
     Z2 = pipe.transform(A2, fit=False); Q2 = pipe.score(Z2)
@@ -286,7 +318,8 @@ if __name__ == "__main__":
     # ---- 缓存到下一步 ----
     np.savez_compressed(f"{CACHE}/step2_scores.npz",
                         Z1=Z1, Q1=Q1, Z2=Z2, Q2=Q2, Z3=Z3, Q3=Q3,
-                        w=w, lab=lab, Q1_pca=Q1_pca, Q1_top=Q1_top, Q1_eq=Q1_eq)
+                        w=w, delta=delta, lab=lab, Q1_pca=Q1_pca, Q1_top=Q1_top,
+                        Q1_mean=Q1_mean)
     with open(f"{CACHE}/pipeline.pkl", "wb") as f:
         pickle.dump(pipe, f)
 
@@ -297,7 +330,7 @@ if __name__ == "__main__":
     data = [Q1[A1.index.get_indexer(A1[A1["domain"] == d].index)] for d in doms]
     bp = ax.boxplot(data, labels=doms, showfliers=False, patch_artist=True)
     for b in bp["boxes"]: b.set_facecolor("#9ecae1")
-    ax.set_ylabel("综合质量分 $Q$"); ax.set_title("A1 七域质量分布（CRITIC 加权几何平均）")
+    ax.set_ylabel("综合质量分 $Q$"); ax.set_title("A1 七域质量分布（CRITIC 加权 Huber 中心）")
     fig.tight_layout(); fig.savefig(f"{FIGS}/F2_domain_quality_box.png"); plt.close(fig)
 
     # ---- 样本级接口 P1-Q_sample ----

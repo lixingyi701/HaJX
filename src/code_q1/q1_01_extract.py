@@ -15,8 +15,8 @@ def extract(path, tag, domain=None):
     rows, doms, wcs = [], [], []
     for row, d, _ in stream_jsonl_xz(path, domain=domain):
         # ===== P2修复: DSIR归一化 (2026-09-24 重新修复) =====
-        # DSIR指标必须在提取时就归一化,除以word_count变为"单位词的质量分"
-        # 否则DSIR与文档长度高度相关(ρ=0.54~0.56),导致虚假冲突率
+        # DSIR 测量假设：先除词数，再由 q1_02 在 A1 上拟合域内长度残差。
+        # 这不是附件已证明的定义，也不依冲突类型改变评分权重。
         wc = max(row.get("rps_doc_word_count", 1), 1)  # 防止除零
         row_values = []
         for c in IND_COLS:

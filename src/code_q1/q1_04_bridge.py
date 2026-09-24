@@ -4,7 +4,7 @@ q1_04_bridge.py — Step4：质量线→配比线桥接（17 配方域质量分 
 方法（创新点 N-bridge）：
   ① 自实现规则特征算子 Φ(text) -> 11 维（对应 rps_* 定义）
   ② 在 A1 上用 content 重算 Φ（与应用端同源，消除实现差），
-     以 Step3 修正分 Q̃ 为标签训练校准函数 ĝ（岭回归 + GBDT 对照，域分层 5 折 CV）
+     以 Step2 主分 Q 为标签训练校准函数 ĝ（岭回归 + GBDT 对照，域分层 5 折 CV）
   ③ 对 A18 的 17 配方域文本算 Φ→ĝ→文档分，聚合成 Q̂_d（中位数 + token 加权 + bootstrap CI）
   ④ direct/near_direct 6 域：Q̂_d 与 Step2 域级分互验 → 报告映射误差
 输出：P1-Q_domain（17 域，带 CI 与来源等级）
@@ -89,10 +89,14 @@ if __name__ == "__main__":
         a1phi.to_pickle(cache_f)
     print(f"A1 复算 Φ: {len(a1phi)} 篇", dict(collections.Counter(a1phi['domain'])))
 
-    # 标签：Step3 修正分 Q̃（Huber 消解后）
-    conf = np.load(f"{CACHE}/step3_conflict.npz")
-    Q1_hub = conf["Q1_hub"]
-    y = Q1_hub[a1phi["row"].to_numpy()]
+    # 标签与样本级接口完全同源：A1 的 CRITIC 加权 Huber 主分 Q。
+    score = np.load(f"{CACHE}/step2_scores.npz")
+    Q1 = score["Q1"]
+    a1_source = pd.read_pickle(f"{CACHE}/A1_indicators.pkl")
+    assert a1phi["row"].max() < len(Q1)
+    assert (a1_source["domain"].iloc[a1phi["row"].to_numpy()].to_numpy()
+            == a1phi["domain"].to_numpy()).all(), "A1 原文行号与评分缓存未对齐"
+    y = Q1[a1phi["row"].to_numpy()]
     X = phi_design(a1phi[PHI_COLS])
     dom = a1phi["domain"].to_numpy()
 
@@ -101,18 +105,20 @@ if __name__ == "__main__":
     for d in np.unique(dom):
         idx = np.where(dom == d)[0]; RNG.shuffle(idx)
         folds[idx] = np.arange(len(idx)) % 5
-    mu, sd = X.mean(0), X.std(0) + 1e-12
-    Xs = (X - mu) / sd
     cv = {"ridge": [], "gbdt": []}
     for k in range(5):
         tr, te = folds != k, folds == k
-        b = ridge(Xs[tr], y[tr], alpha=1.0)
-        cv["ridge"].append(r2_score(y[te], predict_lin(b, Xs[te])))
-        g = gbdt_fit(Xs[tr], y[tr], n_trees=250, lr=0.06)
-        cv["gbdt"].append(r2_score(y[te], gbdt_predict(g, Xs[te])))
+        fold_mu, fold_sd = X[tr].mean(0), X[tr].std(0) + 1e-12
+        Xtr, Xte = (X[tr]-fold_mu)/fold_sd, (X[te]-fold_mu)/fold_sd
+        b = ridge(Xtr, y[tr], alpha=1.0)
+        cv["ridge"].append(r2_score(y[te], predict_lin(b, Xte)))
+        g = gbdt_fit(Xtr, y[tr], n_trees=250, lr=0.06)
+        cv["gbdt"].append(r2_score(y[te], gbdt_predict(g, Xte)))
     print("校准函数 CV R²:", {k: round(float(np.mean(v)), 4) for k, v in cv.items()})
     use_gbdt = np.mean(cv["gbdt"]) > np.mean(cv["ridge"])
     model_name = "GBDT" if use_gbdt else "Ridge"
+    mu, sd = X.mean(0), X.std(0) + 1e-12
+    Xs = (X - mu) / sd
     if use_gbdt:
         model = gbdt_fit(Xs, y, n_trees=300, lr=0.06)
         pred_fn = lambda Xn: gbdt_predict(model, Xn)
@@ -150,10 +156,9 @@ if __name__ == "__main__":
     # ---- ④ 域级聚合 + 与 Step2 官方分互验 ----
     mapping = pd.read_csv(MAP_PATH)
     dom_q = pd.read_csv(f"{TABLES}/T2_domain_quality.csv")
-    # 质量域官方分（A1 口径，Huber 修正后重算域级）
-    A1 = pd.read_pickle(f"{CACHE}/A1_indicators.pkl")
-    off = {d: float(np.median(Q1_hub[A1.index.get_indexer(A1[A1['domain']==d].index)]))
-           for d in A1["domain"].unique()}
+    # 映射域点估计与区间均来自 Step2 的 A1 主分中位数 bootstrap。
+    a1_domain = dom_q[dom_q["dataset"] == "A1"].set_index("domain")
+    off = a1_domain["Q_med"].to_dict()
 
     rows = []
     for d, sub in a18.groupby("domain"):
@@ -165,31 +170,42 @@ if __name__ == "__main__":
         qd = mrow["quality_domain"].iloc[0] if len(mrow) else "(none)"
         rows.append(dict(mixture_domain=d, n=n,
                          Q_med=float(np.median(q)),
-                         CI_lo=float(np.quantile(bs, .025)), CI_hi=float(np.quantile(bs, .975)),
-                         Q_tokenw=float((q*wc).sum()/wc.sum()),
+                         CI_calibrated_lo=float(np.quantile(bs, .025)),
+                         CI_calibrated_hi=float(np.quantile(bs, .975)),
+                         Q_tokenw_calibrated=float((q*wc).sum()/wc.sum()),
                          mapping_type=mtype,
-                         Q_official=off.get(qd, np.nan),
-                         evidence="校准推断" if mtype == "inferred" else "映射+校准双源"))
+                         Q_mapped_A1=off.get(qd, np.nan),
+                         mapped_quality_domain=qd,
+                         evidence="校准推断" if mtype == "inferred" else "A1映射主分"))
     bridge = pd.DataFrame(rows).sort_values("Q_med", ascending=False)
-    bridge.to_csv(f"{TABLES}/T4_bridge_17domains.csv", index=False)
     print(bridge.to_string(index=False))
 
     # 互验：6 个映射域上 校准分 vs 官方分
-    both = bridge.dropna(subset=["Q_official"])
+    both = bridge.dropna(subset=["Q_mapped_A1"])
     val = dict(n=len(both),
-               pearson=pearson(both["Q_med"].to_numpy(), both["Q_official"].to_numpy()),
-               spearman=spearman(both["Q_med"].to_numpy(), both["Q_official"].to_numpy()),
-               mae=float(np.abs(both["Q_med"] - both["Q_official"]).mean()))
+               pearson=pearson(both["Q_med"].to_numpy(), both["Q_mapped_A1"].to_numpy()),
+               spearman=spearman(both["Q_med"].to_numpy(), both["Q_mapped_A1"].to_numpy()),
+               mae=float(np.abs(both["Q_med"] - both["Q_mapped_A1"]).mean()))
     print("6 映射域互验:", {k: round(v, 4) if isinstance(v, float) else v for k, v in val.items()})
     pd.Series(val).to_csv(f"{TABLES}/T4_bridge_validation.csv")
 
     # ---- 接口 P1-Q_domain ----
     # 最终 17 域质量分：映射域用官方分（更可信），inferred 用校准分；统一带 CI
     final = bridge.copy()
-    final["Q_final"] = np.where(final["Q_official"].notna(),
-                                final["Q_official"], final["Q_med"])
+    final["Q_final"] = np.where(final["Q_mapped_A1"].notna(),
+                                final["Q_mapped_A1"], final["Q_med"])
+    final["CI_lo"] = [float(a1_domain.loc[d, "CI_lo"]) if d in a1_domain.index else cal
+                      for d, cal in zip(final["mapped_quality_domain"], final["CI_calibrated_lo"])]
+    final["CI_hi"] = [float(a1_domain.loc[d, "CI_hi"]) if d in a1_domain.index else cal
+                      for d, cal in zip(final["mapped_quality_domain"], final["CI_calibrated_hi"])]
+    final["CI_source"] = np.where(final["Q_mapped_A1"].notna(),
+                                  "A1主分中位数bootstrap", "A18桥接预测中位数bootstrap")
+    final["Q_tokenw"] = [float(a1_domain.loc[d, "Q_tokenw"]) if d in a1_domain.index else cal
+                          for d, cal in zip(final["mapped_quality_domain"], final["Q_tokenw_calibrated"])]
     final["cv_r2_calibration"] = cv_r2
     final["calibration_model"] = model_name
+    assert ((final["CI_lo"] <= final["Q_final"]) & (final["Q_final"] <= final["CI_hi"])).all()
+    final.to_csv(f"{TABLES}/T4_bridge_17domains.csv", index=False)
     final.to_csv(f"{IFACE}/P1_Q_domain.csv", index=False)
     np.savez_compressed(f"{CACHE}/step4_bridge.npz",
                         domains=final["mixture_domain"].to_numpy(),

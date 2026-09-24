@@ -59,13 +59,13 @@ if __name__ == "__main__":
     def gb_pred_target(p, w):
         z = clr(p[None, :])
         ln = np.array([[gbdt_predict(m, z)[0] for m in gb_models]])
-        return float(np.exp(ln) @ w)
+        return float((np.exp(ln) @ w).item())
 
     # ---- ② 基准比较 ----
     p_uniform = np.full(17, 1/17)
     p_pile = P_tr.mean(0)          # 512 组训练配比的均值 ≈ Dirichlet 先验中心（题给近似人工配比）
     def pred_target(p, w):
-        z = clr(p[None, :]); return float(np.exp(predict_all(B_clr, z)) @ w)
+        z = clr(p[None, :]); return float((np.exp(predict_all(B_clr, z)) @ w).item())
     bench = pd.DataFrame([
         dict(config="p*_等权口径", L_eq=gb_pred_target(p_star_eq, w_eval),
              L_cc=gb_pred_target(p_star_eq, np.eye(13)[icc])),
@@ -139,7 +139,7 @@ if __name__ == "__main__":
     bp = ax.boxplot(data, labels=doms, showfliers=False, patch_artist=True)
     for b_ in bp["boxes"]: b_.set_facecolor("#9ecae1")
     ax.set_ylabel("综合质量分 $Q$")
-    ax.set_title("A1 七域质量分布（CRITIC 加权几何平均）")
+    ax.set_title("A1 七域质量分布（CRITIC 加权 Huber 中心）")
     fig.tight_layout(); fig.savefig(f"{FIGS}/F2_domain_quality_box.png"); plt.close(fig)
 
     # 图 7c：质量 vs 训练边际价值散点（"质量≠训练价值"证据图）

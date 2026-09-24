@@ -1,20 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-q1_03_conflict.py — Step3：指标冲突的定义、成因与消解（针对 SQ2）
+q1_03_conflict.py — Step3：主质量分 Q 之后的指标冲突诊断（针对 SQ2）
 流程：
   ① 25 指标按来源分 4 组，组内 Kendall W（同源一致性基线）
   ② 组分数 = 组内标准化分中位数；冲突度 c(x) = 组分数域内分位排名的极差
   ③ 阈值 τ 数据自适应（冲突率-τ 曲线 + 肘部/曲率法），拒绝预设阈值
   ④ 成因：冲突类型（最高组×最低组对）× 域 交叉表 + 卡方检验
-  ⑤ 消解：Huber 连续降权（对偏离组降权）→ 修正分 Q̃；对照调和平均（短板惩罚）
-  ⑥ A2/A3 同一规则复检（阈值沿用 A1 的 τ）
+  ⑤ A2/A3 同一规则复检（阈值沿用 A1 的 τ）；冲突不反馈到 Q
 """
-import os, sys, pickle
+import os, sys
 import numpy as np
 import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from q1_00_common import (CACHE, TABLES, FIGS, IND_COLS, GROUPS,
-                          rankdata, kendall_w, chi2_sf, spearman,
+                          rankdata, kendall_w, chi2_sf,
                           setup_cjk_matplotlib)
 
 GK = list(GROUPS.keys())
@@ -37,7 +36,7 @@ def conflict_score(R):
     return R.max(axis=1) - R.min(axis=1)
 
 def elbow_tau(c, taus=None):
-    """冲突率-τ 曲线的最大曲率点（离散二阶差分）"""
+    """冲突率-τ 曲线的最大弦距肘部。"""
     taus = np.linspace(0.3, 0.95, 66) if taus is None else taus
     rate = np.array([(c > t).mean() for t in taus])
     # 归一化后计算到首尾连线的最大距离（Thorndike 肘部的几何形式）
@@ -47,39 +46,13 @@ def elbow_tau(c, taus=None):
     i = int(np.argmax(d))
     return float(taus[i]), taus, rate
 
-def huber_resolve(Z, domains, w, tau_z=1.5, eps=1e-3):
-    """Huber 降权消解：对每篇文档，组 z 偏离整体中位的组降权。
-       组权重 u_g = min(1, tau/|dev_g|)，dev 为该组分位排名与文档自身中位排名的差
-       （稳健化到与 z 同量级）。返回修正 Q̃。"""
-    S = group_scores(Z)
-    R = domain_pct_rank(S, domains)
-    med = np.median(R, axis=1, keepdims=True)
-    dev = (R - med) / 0.25          # 0.25≈排名的 IQR 量级
-    u = np.minimum(1.0, tau_z / np.maximum(np.abs(dev), 1e-9))
-    # 指标级权重 = CRITIC 权重 × 其所在组的文档级降权
-    Wdoc = np.empty((len(Z), len(IND_COLS)))
-    for gi, g in enumerate(GK):
-        for j in G_IDX[g]:
-            Wdoc[:, j] = w[j] * u[:, gi]
-    Wdoc /= Wdoc.sum(axis=1, keepdims=True)
-    return np.exp((Wdoc * np.log(np.clip(Z, eps, 1))).sum(axis=1))
-
-def harmonic_resolve(Z, domains, tau, eps=1e-3):
-    """调和平均消解（短板惩罚对照）：冲突文档的组分数取调和平均，非冲突取算术平均"""
-    S = np.clip(group_scores(Z), eps, 1)
-    R = domain_pct_rank(S, domains)
-    c = conflict_score(R)
-    harm = S.shape[1] / (1.0 / S).sum(axis=1)
-    arith = S.mean(axis=1)
-    return np.where(c > tau, harm, arith), c
-
 # =====================================================================
 if __name__ == "__main__":
     A1 = pd.read_pickle(f"{CACHE}/A1_indicators.pkl")
     A2 = pd.read_pickle(f"{CACHE}/A2_indicators.pkl")
     A3 = pd.read_pickle(f"{CACHE}/A3_indicators.pkl")
     sc = np.load(f"{CACHE}/step2_scores.npz")
-    Z1, Q1, w = sc["Z1"], sc["Q1"], sc["w"]
+    Z1, Q1 = sc["Z1"], sc["Q1"]
     Z2, Q2, Z3, Q3 = sc["Z2"], sc["Q2"], sc["Z3"], sc["Q3"]
     d1 = A1["domain"].to_numpy(); d2 = A2["domain"].to_numpy(); d3 = A3["domain"].to_numpy()
 
@@ -121,20 +94,7 @@ if __name__ == "__main__":
     chi2 = float(((obs - E)**2 / E).sum()); df = (obs.shape[0]-1)*(obs.shape[1]-1)
     print(f"冲突×域 卡方={chi2:.1f}, df={df}, p≈{chi2_sf(chi2, df):.2e}")
 
-    # ---- ⑤ 消解 ----
-    Q1_hub = huber_resolve(Z1, d1, w)
-    Q1_harm, _ = harmonic_resolve(Z1, d1, tau)
-    chg = pd.DataFrame({
-        "指标": ["全体 Spearman(Q, Q̃_Huber)", "冲突样本均值变动(Huber)",
-               "非冲突样本均值变动(Huber)", "冲突样本均值变动(调和)"],
-        "值": [spearman(Q1, Q1_hub),
-              float((Q1_hub - Q1)[is_conf].mean()),
-              float((Q1_hub - Q1)[~is_conf].mean()),
-              float((Q1_harm - group_scores(Z1).mean(1))[is_conf].mean())]})
-    chg.to_csv(f"{TABLES}/T3_resolution_effect.csv", index=False)
-    print(chg.to_string(index=False))
-
-    # ---- ⑥ 扩展集复检（同一 τ，同一规则） ----
+    # ---- ⑤ 扩展集复检（同一 τ，同一规则） ----
     rows = []
     for tag, Z, Q, d in [("A1", Z1, Q1, d1), ("A2", Z2, Q2, d2), ("A3", Z3, Q3, d3)]:
         S = group_scores(Z); R = domain_pct_rank(S, d); c = conflict_score(R)
@@ -161,22 +121,19 @@ if __name__ == "__main__":
             if i in want:
                 r = json.loads(line)
                 found[i] = {"row": i, "domain": d1[i], "conflict": float(c1[i]),
-                            "type": ctype[i], "Q": float(Q1[i]), "Q_resolved": float(Q1_hub[i]),
-                            "content_head": (r.get("content") or "")[:500]}
+                            "type": ctype[i], "Q": float(Q1[i]),
+                            "content_head": " ".join((r.get("content") or "").split())[:500]}
             if len(found) == len(want): break
     pd.DataFrame(found.values()).to_csv(f"{TABLES}/T3_manual_check_samples.csv", index=False)
 
     np.savez_compressed(f"{CACHE}/step3_conflict.npz",
-                        c1=c1, tau=tau, is_conf=is_conf,
-                        Q1_hub=Q1_hub, Q1_harm=Q1_harm,
-                        Q2_hub=huber_resolve(Z2, d2, w),
-                        Q3_hub=huber_resolve(Z3, d3, w))
+                        c1=c1, tau=tau, is_conf=is_conf)
 
     # ---- 图：冲突率-τ 曲线 ----
     plt = setup_cjk_matplotlib()
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(taus, rate * 100, lw=2)
-    ax.axvline(tau, ls="--", c="crimson", label=f"自适应阈值 τ={tau:.2f}（最大曲率）")
+    ax.axvline(tau, ls="--", c="crimson", label=f"自适应阈值 τ={tau:.2f}（最大弦距）")
     ax.scatter([tau], [conflict_rate * 100], c="crimson", zorder=5)
     ax.set_xlabel("阈值 τ"); ax.set_ylabel("冲突率 (%)")
     ax.set_title("冲突率–阈值曲线：冲突率不是 0%，且结论对 τ 稳健")
