@@ -3,7 +3,7 @@
 q1_05_mixture.py — Step5：配比→Loss 建模（针对 SQ3）
 主模型：clr 变换 + 对数空间 Huber 线性回归  ln L_v = b_v + Σ β_{v,i} z_i
 改进证据（N1）：与"裸配比 OLS"（RegMix 原式）在检验集上对比
-非线性对照：迷你 GBDT（替代 LightGBM，无外网环境自实现）
+非线性对照：迷你 GBDT（树桩提升，替代 LightGBM）；树数与学习率只在 A4/A5 内五折 CV 选定
 迁移矩阵：T[i,v] = ∂lnL_v/∂p_i（clr 链式法则折算到单纯形切空间）
 λ 交互项（N3）：ln L_v = ... + λ_v·Σ p_i(1-Q̂_{d(i)})，嵌套检验 + bootstrap CI
 """
@@ -16,6 +16,8 @@ from q1_00_common import (RT, CACHE, TABLES, IFACE, FIGS, clr, ols, huber_regres
                           spearman, setup_cjk_matplotlib)
 
 RNG = np.random.default_rng(2026)
+GBDT_LRS = (0.03, 0.06, 0.12, 0.25)
+GBDT_STAGES = (100, 250, 500, 1000)
 
 def load_pair(mix_file, loss_file):
     """读配比+Loss 表，按 index 内连接对齐（1B 表 64vs63 行的处理）"""
@@ -35,6 +37,33 @@ def fit_all(Z, lnY, reg="huber"):
 
 def predict_all(B, Z):
     return np.stack([predict_lin(B[v], Z) for v in range(B.shape[0])], axis=1)
+
+def gbdt_staged(model, X, stages):
+    """同一串树在若干树数处的预测，供 CV 一次拟合评估多个树数"""
+    F = np.full(len(X), model["base"]); out = {}
+    for k, st in enumerate(model["trees"], 1):
+        F = F + model["lr"] * np.where(X[:, st.f] <= st.t, st.l, st.r)
+        if k in stages:
+            out[k] = F.copy()
+    return out
+
+def cv_gbdt(Z, lnY, k=5, lrs=GBDT_LRS, stages=GBDT_STAGES, seed=2026):
+    """只用训练集的五折 CV；准则 = 13 域留折 ln L RMSE 的均值"""
+    folds = np.random.default_rng(seed).permutation(len(Z)) % k
+    rows = []
+    for lr in lrs:
+        sse = {s: np.zeros(lnY.shape[1]) for s in stages}
+        for f in range(k):
+            tr, te = folds != f, folds == f
+            for v in range(lnY.shape[1]):
+                m = gbdt_fit(Z[tr], lnY[tr, v], n_trees=max(stages), lr=lr)
+                for s, pred in gbdt_staged(m, Z[te], stages).items():
+                    sse[s][v] += ((pred - lnY[te, v]) ** 2).sum()
+        for s in stages:
+            rows.append(dict(lr=lr, n_trees=s, cv_rmse_lnL=float(np.sqrt(sse[s] / len(Z)).mean())))
+    tab = pd.DataFrame(rows)
+    best = tab.loc[tab.cv_rmse_lnL.idxmin()]
+    return tab, int(best.n_trees), float(best.lr)
 
 def eval_model(name, Yh_ln, Y, w_eval):
     """整体与逐域指标；目标损失 = 评价权重加权"""
@@ -76,9 +105,13 @@ if __name__ == "__main__":
     r, _ = eval_model("裸配比OLS(RegMix原式)", Yh_raw, Y_te, w_eval)
     results.append(r)
 
-    gb_models = [gbdt_fit(Z_tr, lnY_tr[:, v], n_trees=250, lr=0.06) for v in range(len(lcols))]
+    cv_tab, gb_n, gb_lr = cv_gbdt(Z_tr, lnY_tr)
+    cv_tab.to_csv(f"{TABLES}/T5_gbdt_cv.csv", index=False)
+    print("GBDT 五折 CV（只用 A4/A5）:"); print(cv_tab.round(4).to_string(index=False))
+    print(f"选定 n_trees={gb_n}, lr={gb_lr}")
+    gb_models = [gbdt_fit(Z_tr, lnY_tr[:, v], n_trees=gb_n, lr=gb_lr) for v in range(len(lcols))]
     Yh_gb = np.stack([gbdt_predict(m, Z_te) for m in gb_models], 1)
-    r, _ = eval_model("GBDT(非线性对照)", Yh_gb, Y_te, w_eval)
+    r, _ = eval_model(f"GBDT(非线性对照,CV选参 n={gb_n},lr={gb_lr})", Yh_gb, Y_te, w_eval)
     results.append(r)
 
     res_tab = pd.DataFrame(results)
@@ -132,7 +165,8 @@ if __name__ == "__main__":
     # ---- 缓存 ----
     np.savez_compressed(f"{CACHE}/step5_mixture.npz",
                         B_clr=B_clr, w_eval=w_eval, Qd=Qd,
-                        DOM17=np.array(DOM17), DOM13=np.array(DOM13))
+                        DOM17=np.array(DOM17), DOM13=np.array(DOM13),
+                        gbdt_n_trees=gb_n, gbdt_lr=gb_lr)
     import pickle
     with open(f"{CACHE}/step5_gbdt.pkl", "wb") as f:
         pickle.dump(gb_models, f)
