@@ -1,19 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-q1_06_scale.py — Step6：跨尺度验证与外推稳健性（针对 SQ4/尺度边界）
-  ① A6–A11：1M留出/60M/1B 逐域 R²/RMSE/Spearman → 排名衰减曲线（P1-rank_decay）
-  ② A12–A15：est 表（幂律外推生成、非观测）
-     - 1M 系数直接预测 → 系统偏差
-     - 三尺度截距/系数漂移拟合 b_v(N)=b_v0+ρ_v·ln(N/1e6) → 修正后预测
-     - Spearman + 灰色关联度：各验证域外推结论稳健性排序
+q1_06_scale.py — Step6：跨尺度检验、尺度修正与外推表稳健性
+配比系数只在 A4/A5（1M 训练）上拟合后冻结。
+  ① A6–A11：冻结 1M clr+Huber 模型直接预测 → 逐域 R²/RMSE/Spearman、排名衰减（P1_rank_decay）
+  ② P1_scale_calibration：冻结 1M 系数的逐域校准斜率（仅评估统计量）
+  ③ 冻结 1M GBDT 直接预测 60M/1B
+  ⑤ 尺度修正（按规模留一档）：ln L_v = b_v^1M + ρ_v t + (1+κt)·g_v(p)，t=ln(N/1e6)；
+     ρ_v、κ 只由 1M 训练与 60M（A8/A9）确定，1B（A10/A11）只作独立检验
+  ④ A12–A15（估算/外推、非观测）：冻结模型、尺度修正模型与"同配比 1M 观测 Loss"并列；
+     A12/A14 是 A4 的子集，A13/A15 由三尺度幂律外推生成，只作一致性对照
 """
-import os, sys
+import os, sys, pickle
 import numpy as np
 import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from q1_00_common import (RT, CACHE, TABLES, IFACE, FIGS, clr, huber_regression,
-                          predict_lin, r2_score, rmse, mae, spearman,
-                          setup_cjk_matplotlib)
+from q1_00_common import (CACHE, TABLES, IFACE, FIGS, clr, r2_score, rmse, mae, spearman,
+                          gbdt_predict, setup_cjk_matplotlib)
 from q1_05_mixture import load_pair, predict_all
 
 SCALES = {"1M_heldout": ("test_mixture_1m.csv", "test_pile_loss_1m.csv", 1e6),
@@ -21,174 +23,204 @@ SCALES = {"1M_heldout": ("test_mixture_1m.csv", "test_pile_loss_1m.csv", 1e6),
           "1B": ("test_mixture_1B.csv", "test_pile_loss_1B.csv", 1e9)}
 ESTS = {"10B_est": ("est_mixture_10b.csv", "est_pile_loss_10b.csv", 1e10),
         "70B_est": ("est_mixture_70b.csv", "est_pile_loss_70b.csv", 7e10)}
+TRAIN = ("train_mixture_1m.csv", "train_pile_loss_1m.csv")
 
-def grey_relation(ref, cmp_, rho=0.5):
-    """灰色关联度（均值化后）"""
-    r = ref / ref.mean(); c = cmp_ / cmp_.mean()
-    d = np.abs(r - c)
-    return float(((d.min() + rho*d.max()) / (d + rho*d.max())).mean())
+
+def gbdt_all(models, Z):
+    return np.exp(np.stack([gbdt_predict(m, Z) for m in models], 1))
+
+
+def pooled_level(G, lnY, slope=None):
+    """汇总斜率 Σcov/Σvar（或给定斜率）与逐域截距 b_v = ȳ_v − s·ḡ_v"""
+    gc, yc = G - G.mean(0), lnY - lnY.mean(0)
+    s = float((gc * yc).sum() / (gc * gc).sum()) if slope is None else float(slope)
+    return s, lnY.mean(0) - s * G.mean(0)
+
+
+def level_metrics(Y, lnYh, w):
+    Yh = np.exp(lnYh)
+    return dict(MAE_domain_mean=float(np.abs(Yh - Y).mean()), MAE_target=mae(Y @ w, Yh @ w),
+                R2_mean=float(np.mean([r2_score(Y[:, v], Yh[:, v]) for v in range(Y.shape[1])])),
+                spearman_target=spearman(Y @ w, Yh @ w),
+                mean_pred_loss=float(Yh.mean()), mean_obs_loss=float(Y.mean()))
+
 
 if __name__ == "__main__":
     st5 = np.load(f"{CACHE}/step5_mixture.npz", allow_pickle=True)
     B_clr, w_eval = st5["B_clr"], st5["w_eval"]
     DOM13 = st5["DOM13"].tolist()
+    with open(f"{CACHE}/step5_gbdt.pkl", "rb") as f:
+        gb_1m = pickle.load(f)
 
-    # ---- ① 三尺度验证 ----
-    rows, decay = [], []
-    per_scale_data = {}
+    # ---- ① 冻结 1M 线性模型直接预测三个检验尺度 ----
+    rows, decay, data = [], [], {}
     for tag, (mf, lf, N) in SCALES.items():
         P, Y, _, lcols, _ = load_pair(mf, lf)
-        # 60M/1B 的 loss 列名应与 1M 相同——核对
         doms = [c.replace("metric/the_pile_", "").replace("_val_loss", "") for c in lcols]
         assert doms == DOM13, f"{tag} loss 列不一致: {doms}"
         Z = clr(P)
         Yh = np.exp(predict_all(B_clr, Z))
-        Lt, Lth = Y @ w_eval, Yh @ w_eval
-        sp = spearman(Lt, Lth)
-        per_r2 = [r2_score(Y[:, v], Yh[:, v]) for v in range(len(DOM13))]
-        rows.append(dict(scale=tag, N=N, n_configs=len(P),
-                         spearman_target=sp,
-                         R2_mean=float(np.mean(per_r2)),
-                         RMSE_mean=float(np.mean([rmse(Y[:, v], Yh[:, v]) for v in range(len(DOM13))])),
-                         MAE_mean=float(np.mean([mae(Y[:, v], Yh[:, v]) for v in range(len(DOM13))]))))
+        sp = spearman(Y @ w_eval, Yh @ w_eval)
+        rows.append(dict(scale=tag, N=N, n_configs=len(P), spearman_target=sp,
+                         spearman_domain_mean=float(np.mean([spearman(Y[:, v], Yh[:, v]) for v in range(13)])),
+                         R2_mean=float(np.mean([r2_score(Y[:, v], Yh[:, v]) for v in range(13)])),
+                         RMSE_mean=float(np.mean([rmse(Y[:, v], Yh[:, v]) for v in range(13)])),
+                         MAE_mean=float(np.mean([mae(Y[:, v], Yh[:, v]) for v in range(13)]))))
         decay.append(dict(scale=tag, N=N, spearman=sp))
-        per_scale_data[tag] = (P, Y, Z)
+        data[tag] = (P, Y, Z)
     val_tab = pd.DataFrame(rows)
     val_tab.to_csv(f"{TABLES}/T6_cross_scale_validation.csv", index=False)
-    print(val_tab.to_string(index=False))
-
-    # ---- 排名衰减接口 P1-rank_decay ----
+    print("冻结 1M 线性模型直接预测（绝对 Loss 有尺度平移，R² 为负属预期）:")
+    print(val_tab.round(4).to_string(index=False))
     pd.DataFrame(decay).to_csv(f"{IFACE}/P1_rank_decay.csv", index=False)
 
-    # ---- ② 尺度漂移模型：对每个验证域拟合 截距+系数 的对数尺度线性漂移 ----
-    # 用三尺度各自重拟合的回归系数（60M/1B 上重拟合）观察漂移
-    B_by_scale = {"1M_heldout": B_clr}   # 1M 用训练集拟合的主系数
-    for tag in ("60M", "1B"):
-        P, Y, Z = per_scale_data[tag]
-        B_by_scale[tag] = np.stack([huber_regression(Z, np.log(Y[:, v]))
-                                    for v in range(len(DOM13))])
-    Ns = np.array([SCALES[t][2] for t in B_by_scale])
-    lnN = np.log(Ns / 1e6)
-    # 漂移拟合：对每个 (v, 参数k)，最小二乘直线 param = a + rho*lnN
-    Bs = np.stack([B_by_scale[t] for t in B_by_scale])   # (3, 13, 18)
-    A_ = np.column_stack([np.ones(3), lnN])
-    coef_drift = np.linalg.lstsq(A_, Bs.reshape(3, -1), rcond=None)[0]  # (2, 13*18)
-    a_hat = coef_drift[0].reshape(Bs.shape[1:])
-    rho_hat = coef_drift[1].reshape(Bs.shape[1:])
-    # 漂移强度表：截距漂移 vs 斜率漂移
-    drift_tab = pd.DataFrame({
-        "domain": DOM13,
-        "rho_intercept": rho_hat[:, 0],
-        "rho_beta_maxabs": np.abs(rho_hat[:, 1:]).max(axis=1),
-        "rho_beta_meanabs": np.abs(rho_hat[:, 1:]).mean(axis=1)})
-    drift_tab.to_csv(f"{TABLES}/T6_coef_drift.csv", index=False)
-    print("系数漂移（截距 ρ 前5）:\n",
-          drift_tab.sort_values("rho_intercept").head().round(4).to_string(index=False))
-
-    # ---- ③ est 表外推 ----
-    ext_rows = []
-    for tag, (mf, lf, N) in ESTS.items():
+    # ---- ② 冻结 1M 系数的校准统计（仅评估） ----
+    cal_sets = {"1M_train": (*TRAIN, 1e6, "train")}
+    cal_sets.update({t: (m, l, n, "eval") for t, (m, l, n) in SCALES.items()})
+    cal_rows = []
+    for tag, (mf, lf, N, role) in cal_sets.items():
         P, Y, _, lcols, _ = load_pair(mf, lf)
-        doms = [c.replace("metric/the_pile_", "").replace("_val_loss", "") for c in lcols]
+        assert [c.replace("metric/the_pile_", "").replace("_val_loss", "") for c in lcols] == DOM13
         Z = clr(P)
-        # 直接套 1M 系数
-        Yh0 = np.exp(predict_all(B_clr, Z))
-        # 尺度修正系数
-        B_corr = a_hat + rho_hat * np.log(N / 1e6)
-        Yh1 = np.exp(predict_all(B_corr, Z))
+        for v, d in enumerate(DOM13):
+            g = Z @ B_clr[v, 1:]
+            y = np.log(Y[:, v])
+            gc, yc = g - g.mean(), y - y.mean()
+            cal_rows.append(dict(scale=tag, N=N, role=role, n_configs=len(P), domain=d,
+                                 cov_yg=float((gc*yc).mean()), var_g=float((gc*gc).mean()),
+                                 calib_slope=float((gc*yc).sum()/(gc*gc).sum()),
+                                 mean_obs_loss=float(Y[:, v].mean()), spearman=spearman(y, g)))
+    cal = pd.DataFrame(cal_rows)
+    cal.to_csv(f"{IFACE}/P1_scale_calibration.csv", index=False)
+    pooled = cal.groupby(["scale", "N", "role"], sort=False).apply(
+        lambda s: pd.Series(dict(pooled_slope=s.cov_yg.sum()/s.var_g.sum(),
+                                 mean_obs_loss=s.mean_obs_loss.mean()))).reset_index()
+    print("\nP1_scale_calibration（冻结 1M 系数的校准斜率，仅评估）:")
+    print(pooled.round(4).to_string(index=False))
+
+    # ---- ③ 冻结 1M GBDT 直接预测 60M/1B ----
+    g_rows = []
+    for tag in ("1M_heldout", "60M", "1B"):
+        P, Y, Z = data[tag]
+        Yh = gbdt_all(gb_1m, Z)
+        g_rows.append(dict(test_scale=tag, model="1M_GBDT_frozen",
+                           spearman_target=spearman(Y @ w_eval, Yh @ w_eval),
+                           MAE_target=mae(Y @ w_eval, Yh @ w_eval)))
+    gtab = pd.DataFrame(g_rows)
+    gtab.to_csv(f"{TABLES}/T6_gbdt_cross_scale.csv", index=False)
+    print("\n冻结 1M GBDT 直接预测:"); print(gtab.round(4).to_string(index=False))
+
+    # ---- ⑤ 尺度修正：1M 训练 + 60M 标定，1B 独立检验 ----
+    b1m, Bet = B_clr[:, 0], B_clr[:, 1:]
+    tN = lambda N: np.log(N / 1e6)
+    G = {tag: data[tag][2] @ Bet.T for tag in data}          # 冻结配比部分 g_v(p)
+    lnY = {tag: np.log(data[tag][1]) for tag in data}
+    s60, b60 = pooled_level(G["60M"], lnY["60M"])
+    _, b60_int = pooled_level(G["60M"], lnY["60M"], slope=1.0)
+    t60 = tN(6e7)
+    kappa, rho, rho_int = (s60 - 1) / t60, (b60 - b1m) / t60, (b60_int - b1m) / t60
+
+    def corrected(Gm, N, slope=True):
+        t = tN(N)
+        return b1m + rho * t + (1 + kappa * t) * Gm if slope else b1m + rho_int * t + Gm
+
+    s1b_obs, b1b_obs = pooled_level(G["1B"], lnY["1B"])
+    sc_rows = []
+    for tag, role in (("60M", "标定集（同集）"), ("1B", "独立检验")):
+        N = SCALES[tag][2]; Y = data[tag][1]
+        for name, lnh in (("冻结1M", b1m + G[tag]),
+                          ("仅截距修正", corrected(G[tag], N, slope=False)),
+                          ("截距+缩放修正", corrected(G[tag], N))):
+            sc_rows.append(dict(scale=tag, N=N, role=role, method=name, **level_metrics(Y, lnh, w_eval)))
+    sc_rows.append(dict(scale="1B", N=1e9, role="同集拟合（误差下界参照，不作结论）", method="1B同集截距+斜率",
+                        **level_metrics(data["1B"][1], b1b_obs + s1b_obs * G["1B"], w_eval)))
+    sc_tab = pd.DataFrame(sc_rows)
+    sc_tab.to_csv(f"{TABLES}/T6_scale_correction.csv", index=False)
+    par = pd.DataFrame(dict(domain=DOM13, b_1M=b1m, b_60M=b60, rho=rho, rho_intercept_only=rho_int,
+                            b_1B_insample=b1b_obs))
+    par["kappa"] = kappa; par["s_60M"] = s60
+    par["s_1B_pred"] = 1 + kappa * tN(1e9); par["s_1B_insample"] = s1b_obs
+    par.to_csv(f"{TABLES}/T6_scale_correction_params.csv", index=False)
+    print(f"\n尺度修正（ρ_v、κ 只由 1M 训练 + 60M 定）：s(60M)={s60:.4f}, κ={kappa:.5f}, "
+          f"s(1B) 预测 {1 + kappa * tN(1e9):.4f} / 同集 {s1b_obs:.4f}")
+    print(sc_tab.round(4).to_string(index=False))
+
+    # ---- ④ A12–A15 估算表：冻结模型 + 尺度修正 + 同配比 1M 观测基准 ----
+    Ptr, Ytr, _, _, idx_tr = load_pair(*TRAIN)
+    tr_by_idx = pd.DataFrame(Ytr, index=idx_tr)
+    ext_rows, dom_rows = [], []
+    for tag, (mf, lf, N) in ESTS.items():
+        P, Y, _, lcols, idx = load_pair(mf, lf)
+        assert [c.replace("metric/the_pile_", "").replace("_val_loss", "") for c in lcols] == DOM13
+        assert set(idx) <= set(idx_tr), f"{tag} 配比不全在 A4 中"
+        Y1m = tr_by_idx.loc[idx].to_numpy()
+        Ptr_sub = Ptr[pd.Index(idx_tr).get_indexer(idx)]
+        same_mix = bool(np.allclose(Ptr_sub, P, atol=1e-6))
+        Z = clr(P)
+        preds = {"冻结1M线性": np.exp(predict_all(B_clr, Z)), "冻结1M_GBDT": gbdt_all(gb_1m, Z),
+                 "1M线性+尺度修正(1M+60M标定)": np.exp(corrected(Z @ Bet.T, N)),
+                 "同配比1M观测Loss": Y1m}
         Lt = Y @ w_eval
-        for name, Yh in [("直接套用1M系数", Yh0), ("尺度漂移修正后", Yh1)]:
-            Lth = Yh @ w_eval
-            ext_rows.append(dict(
-                est_table=tag, method=name,
-                spearman_target=spearman(Lt, Lth),
-                RMSE_target=rmse(Lt, Lth), MAE_target=mae(Lt, Lth),
-                grey_relation=grey_relation(Lt, Lth)))
+        for name, Yh in preds.items():
+            ext_rows.append(dict(est_table=tag, N=N, n=len(P), method=name,
+                                 spearman_target=spearman(Lt, Yh @ w_eval),
+                                 spearman_domain_mean=float(np.mean([spearman(Y[:, v], Yh[:, v]) for v in range(13)])),
+                                 MAE_domain_mean=float(np.abs(Yh - Y).mean()),
+                                 MAE_target=mae(Lt, Yh @ w_eval),
+                                 mean_pred_loss=float(Yh.mean()), mean_est_loss=float(Y.mean()),
+                                 mixtures_equal_A4_subset=same_mix))
+        for v, d in enumerate(DOM13):
+            dom_rows.append(dict(est_table=tag, domain=d,
+                                 spearman_frozen_linear=spearman(Y[:, v], preds["冻结1M线性"][:, v]),
+                                 spearman_frozen_gbdt=spearman(Y[:, v], preds["冻结1M_GBDT"][:, v]),
+                                 spearman_obs_1M=spearman(Y[:, v], Y1m[:, v])))
     ext_tab = pd.DataFrame(ext_rows)
     ext_tab.to_csv(f"{TABLES}/T6_extrapolation.csv", index=False)
+    dom_tab = pd.DataFrame(dom_rows)
+    dom_tab.to_csv(f"{TABLES}/T6_domain_stability_rank.csv", index=False)
+    print("\nA12–A15（估算/外推、非观测；A12/A14 为 A4 子集）:")
     print(ext_tab.round(4).to_string(index=False))
+    d10 = dom_tab[dom_tab.est_table == "10B_est"].sort_values("spearman_frozen_linear", ascending=False)
+    print("10B 估算表逐域 Spearman（冻结线性） top3 / bottom3:")
+    print(d10.head(3).round(3).to_string(index=False)); print(d10.tail(3).round(3).to_string(index=False))
 
-    # 各验证域外推稳健性排序（10B est 上逐域 Spearman）
-    P, Y, _, lcols, _ = load_pair(*ESTS["10B_est"][:2])
-    Z = clr(P)
-    B_corr = a_hat + rho_hat * np.log(1e10 / 1e6)
-    Yh1 = np.exp(predict_all(B_corr, Z))
-    dom_stab = pd.DataFrame({
-        "domain": DOM13,
-        "spearman_10Best": [spearman(Y[:, v], Yh1[:, v]) for v in range(len(DOM13))],
-        "grey_10Best": [grey_relation(Y[:, v], Yh1[:, v]) for v in range(len(DOM13))]
-    }).sort_values("spearman_10Best", ascending=False)
-    dom_stab.to_csv(f"{TABLES}/T6_domain_stability_rank.csv", index=False)
-    print("外推稳健域 top3/bottom3:\n", dom_stab.head(3).round(3).to_string(index=False),
-          "\n", dom_stab.tail(3).round(3).to_string(index=False))
+    for stale in (f"{CACHE}/step6_scale.npz", f"{TABLES}/T6_coef_drift.csv"):
+        if os.path.exists(stale):
+            os.remove(stale)
 
-    np.savez_compressed(f"{CACHE}/step6_scale.npz",
-                        a_hat=a_hat, rho_hat=rho_hat)
-
-    # ---- ④ P4修复: GBDT跨尺度验证补充 (2026-09-24) ----
-    # 补充非线性模型(GBDT)的跨尺度验证,检查外推稳健性
-    print("\n==== P4补充: GBDT跨尺度验证 ====")
-    import pickle
-    from q1_00_common import gbdt_fit, gbdt_predict
-
-    # 加载1M训练的GBDT模型
-    with open(f"{CACHE}/step5_gbdt.pkl", "rb") as f:
-        gb_1m = pickle.load(f)
-
-    # 在三尺度上分别重新训练GBDT
-    gbdt_rows = []
-    gb_by_scale = {"1M_heldout": gb_1m}
-
-    for tag in ["60M", "1B"]:
-        P, Y, Z = per_scale_data[tag]
-        lnY = np.log(Y)
-        # 在该尺度上重新训练GBDT
-        gb_by_scale[tag] = [gbdt_fit(Z, lnY[:, v], n_trees=250, lr=0.06)
-                           for v in range(len(DOM13))]
-
-    # 交叉预测: 1M模型预测60M/1B数据
-    for test_tag in ["60M", "1B"]:
-        P_test, Y_test, Z_test = per_scale_data[test_tag]
-
-        # 用1M模型预测
-        Yh_1m = np.stack([gbdt_predict(gb_1m[v], Z_test) for v in range(len(DOM13))], 1)
-        Yh_1m = np.exp(Yh_1m)
-
-        # 用该尺度自己的模型预测
-        Yh_self = np.stack([gbdt_predict(gb_by_scale[test_tag][v], Z_test)
-                           for v in range(len(DOM13))], 1)
-        Yh_self = np.exp(Yh_self)
-
-        Lt_test = Y_test @ w_eval
-        gbdt_rows.append(dict(
-            test_scale=test_tag,
-            model="1M_GBDT",
-            spearman_target=spearman(Lt_test, Yh_1m @ w_eval),
-            MAE_target=mae(Lt_test, Yh_1m @ w_eval)))
-        gbdt_rows.append(dict(
-            test_scale=test_tag,
-            model=f"{test_tag}_GBDT_self",
-            spearman_target=spearman(Lt_test, Yh_self @ w_eval),
-            MAE_target=mae(Lt_test, Yh_self @ w_eval)))
-
-    gbdt_tab = pd.DataFrame(gbdt_rows)
-    gbdt_tab.to_csv(f"{TABLES}/T6_gbdt_cross_scale.csv", index=False)
-    print("GBDT跨尺度验证结果:")
-    print(gbdt_tab.round(4).to_string(index=False))
-    print("==== P4补充完成 ====\n")
-    # ---- P4修复结束 ----
-
-    # ---- 图：排名保持衰减曲线 ----
     plt = setup_cjk_matplotlib()
     fig, ax = plt.subplots(figsize=(7, 4.2))
     dd = pd.DataFrame(decay)
-    ax.semilogx(dd["N"], dd["spearman"], "o-", lw=2, ms=8, color="#2b8cbe")
+    ax.semilogx(dd["N"], dd["spearman"], "o-", lw=2, ms=8, color="#2b8cbe", label="冻结 1M 线性")
+    gg = gtab.merge(dd[["scale", "N"]], left_on="test_scale", right_on="scale")
+    ax.semilogx(gg["N"], gg["spearman_target"], "s--", lw=1.5, color="#fd8d3c", label="冻结 1M GBDT")
     for _, r in dd.iterrows():
-        ax.annotate(r["scale"], (r["N"], r["spearman"]),
-                    textcoords="offset points", xytext=(6, -12))
+        ax.annotate(r["scale"], (r["N"], r["spearman"]), textcoords="offset points", xytext=(6, -12))
     ax.set_xlabel("模型规模 N（参数量）"); ax.set_ylabel("目标损失排名 Spearman ρ")
-    ax.set_ylim(0, 1.02)
-    ax.set_title("配比排序可迁移性随规模的衰减（1M 系数直接预测）")
-    ax.grid(alpha=.3)
+    ax.set_ylim(0, 1.02); ax.legend(); ax.grid(alpha=.3)
+    ax.set_title("配比排序的跨尺度可迁移性（均为冻结 1M 模型直接预测）")
     fig.tight_layout(); fig.savefig(f"{FIGS}/F6_rank_decay.png"); plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(7.5, 4.5))
+    obs = sc_tab[sc_tab.method == "冻结1M"].set_index("scale")
+    xo = [1e6, 6e7, 1e9]
+    yo = [float(Ytr.mean()), obs.loc["60M", "mean_obs_loss"], obs.loc["1B", "mean_obs_loss"]]
+    ax.semilogx(xo, yo, "ko", ms=8, label="观测（1M 训练 / 60M / 1B）")
+    corr = sc_tab[sc_tab.method == "截距+缩放修正"].set_index("scale")
+    ext_c = ext_tab[ext_tab.method.str.startswith("1M线性+尺度修正")]
+    fit_1m = float(np.exp(predict_all(B_clr, clr(Ptr))).mean())
+    xc = xo + ext_c.N.tolist()
+    yc = [fit_1m, corr.loc["60M", "mean_pred_loss"], corr.loc["1B", "mean_pred_loss"]] + ext_c.mean_pred_loss.tolist()
+    ax.semilogx(xc, yc, "s--", color="#2b8cbe", label="尺度修正（只用 1M+60M 标定）")
+    ax.semilogx(xo, [fit_1m, obs.loc["60M", "mean_pred_loss"], obs.loc["1B", "mean_pred_loss"]],
+                "^:", color="#fd8d3c", label="冻结 1M（不修正）")
+    ext_e = ext_c.drop_duplicates("est_table")
+    ax.semilogx(ext_e.N, ext_e.mean_est_loss, "D", mfc="none", mec="#a63603", ms=8,
+                label="A13/A15 估算值（非观测）")
+    ax.axvspan(6e8, 1.6e9, color="#fee391", alpha=.4, lw=0)
+    ax.annotate("1B：独立检验", (1e9, yo[2]), textcoords="offset points", xytext=(-30, -18), fontsize=8)
+    ax.set_xlabel("模型规模 N（参数量）"); ax.set_ylabel("13 域平均 Loss")
+    ax.set_title("尺度修正：1M+60M 标定，1B 独立检验，10B/70B 仅作一致性对照")
+    ax.legend(fontsize=8); ax.grid(alpha=.3)
+    fig.tight_layout(); fig.savefig(f"{FIGS}/F6_scale_correction.png"); plt.close(fig)
     print("Step6 done.")

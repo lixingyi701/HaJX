@@ -10,7 +10,9 @@ import pandas as pd
 # ---------------- 路径 ----------------
 from pathlib import Path
 ROOT = str(Path(__file__).resolve().parents[1])  # src: 所有代码和 outputs_q* 的共同父目录
-A_DIR = str(Path(ROOT).parent / "附件" / "A_data_value")
+_ATT_CANDIDATES = [Path(ROOT).parent / "附件", Path(ROOT).parent / "real_attachments"]
+ATT_DIR = next((str(p) for p in _ATT_CANDIDATES if (p / "A_data_value").is_dir()), str(_ATT_CANDIDATES[0]))
+A_DIR = str(Path(ATT_DIR) / "A_data_value")
 OUT = f"{ROOT}/outputs_q1"
 CACHE = f"{OUT}/cache"
 TABLES = f"{OUT}/tables"
@@ -278,7 +280,7 @@ def setup_cjk_matplotlib():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    plt.rcParams["font.family"] = ["Hiragino Sans GB", "Arial Unicode MS", "sans-serif"]
+    plt.rcParams["font.family"] = ["Hiragino Sans GB", "Arial Unicode MS", "Microsoft YaHei", "SimHei", "sans-serif"]
     plt.rcParams["axes.unicode_minus"] = False
     plt.rcParams["figure.dpi"] = 130
     return plt
