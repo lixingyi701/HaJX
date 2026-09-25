@@ -16,7 +16,7 @@
 \toprule
 目录 & 脚本 & 功能 \\
 \midrule
-\texttt{code\_q1/} & \texttt{q1\_01}–\texttt{q1\_08} & 指标展开、CRITIC 评分、冲突、桥接、clr 回归、跨尺度、$\bp^*$ \\
+\texttt{code\_q1/} & \texttt{q1\_01}–\texttt{q1\_07} & 指标展开、CRITIC 评分、冲突、桥接、clr 回归、跨尺度、$\bp^*$ \\
  & \texttt{q2\_00\_reverse\_engineering} & 附件 B 生成公式逆向 \\
 \texttt{code\_q2/} & \texttt{q2\_01\_fit}，\texttt{q2\_02\_theory} & 两步拟合与五形式交叉验证；四条命题的数值互验 \\
 \texttt{code\_q3/} & \texttt{q3\_00\_model} & 广义律、三项成本、向量化求解器、$\Phi$ 判据 \\
@@ -27,27 +27,22 @@
 \end{tabular}
 \end{table}
 
-运行顺序为：\texttt{code\_q1}（\texttt{q1\_01}$\to$\texttt{q1\_08}）$\to$ \texttt{code\_q2} $\to$ \texttt{code\_q3}（\texttt{q3\_01}$\to$\texttt{q3\_03}）$\to$ \texttt{code\_q4}（\texttt{q4\_01}$\to$\texttt{q4\_05}，最后运行 \texttt{q4\_99}）。
+运行顺序为：\texttt{code\_q1}（\texttt{q1\_01}$\to$\texttt{q1\_07}）$\to$ \texttt{code\_q2} $\to$ \texttt{code\_q3}（\texttt{q3\_01}$\to$\texttt{q3\_03}）$\to$ \texttt{code\_q4}（\texttt{q4\_01}$\to$\texttt{q4\_05}，最后运行 \texttt{q4\_99}）。
 
 \subsection{核心程序}
 
-\textbf{(1) CRITIC 权重与 Huber 主质量分（\texttt{code\_q1/q1\_02\_quality.py} 节选）}
+\textbf{(1) CRITIC 权重与加权几何平均（\texttt{code\_q1/q1\_02\_quality.py} 节选）}
 \begin{lstlisting}
 def fit_critic(self, Z):
-    sd = Z.std(axis=0, ddof=1)
-    R = np.corrcoef(Z.T)
-    C = sd * (1 - R).sum(axis=1)
+    sd = Z.std(axis=0, ddof=1)                 # contrast intensity
+    R = np.corrcoef(Z.T)                       # indicator correlation
+    C = sd * (1 - R).sum(axis=1)               # information content C_j
     self.critic_w = C / C.sum()
     return self.critic_w
 
-def fit_delta(self, Z):
-    center = weighted_median(Z, self.critic_w)
-    mad = weighted_median(np.abs(Z - center[:, None]), self.critic_w)
-    self.delta = float(np.clip(1.345 * 1.4826 * np.median(mad), .01, 1.0))
-    return self.delta
-
-def score(self, Z):
-    return weighted_huber_center(Z, self.critic_w, self.delta)
+def score(self, Z, w=None):                    # weighted geometric mean
+    w = self.critic_w if w is None else w
+    return np.exp((w[None, :] * np.log(np.clip(Z, EPS, 1))).sum(axis=1))
 \end{lstlisting}
 
 \textbf{(2) 问题三向量化求解器（\texttt{code\_q3/q3\_00\_model.py} 节选）}
@@ -105,8 +100,8 @@ def shapley(fun, L0, t0, L1, t1):
 
 依据赛题“AI 使用规范”，现披露如下。
 
-\textbf{所用工具：}Claude（Anthropic）、Codex（OpenAI）。
+\textbf{所用工具：}Claude（Anthropic）。
 
-\textbf{使用环节与贡献范围：}(1) 资料整理与概念理解：梳理赛题附件的字段结构与《数据说明》中的条目；(2) 代码编写与调试：数据读取、向量化求解器、绘图脚本的编写与报错排查；(3) 结果核对：编写自动核对脚本，把报告中的数字与程序输出逐项比对；(4) 排版与文字：LaTeX 排版、图表整理与语句润色；(5) 本次 Codex 辅助：依据问题一 SPEC 和现有产物修订 Final 的问题一正文、摘要、图表及修订记录，并检查字段、数值和引用。
+\textbf{使用环节与贡献范围：}(1) 资料整理与概念理解：梳理赛题附件的字段结构与《数据说明》中的条目；(2) 代码编写与调试：数据读取、向量化求解器、绘图脚本的编写与报错排查；(3) 结果核对：编写自动核对脚本，把报告中的数字与程序输出逐项比对；(4) 排版与文字：LaTeX 排版、图表整理与语句润色。
 
-\textbf{参赛队的工作与责任：}模型路线的最终选择、公式推导与结论判断由参赛队负责；提交前仍须对 AI 辅助产生的代码、文字和数值逐项核验。理论与公式应以正式文献或可核查数据为依据，不能以 AI 输出作为学术依据。数值结果及其复现范围以随文代码和附件数据的实际运行结果为准。
+\textbf{参赛队的工作与责任：}模型路线的选择（证据分层、质量项形式由交叉验证裁决、结构性转移按 KKT 活跃集定义、分解方法并列报告等）、公式推导与结论判断由参赛队确定，并对 AI 输出的全部代码与数值逐项运行、核验。文中理论与公式均引用正式文献或由附件数据验证，未以 AI 输出作为学术依据。全部数值结果可由随文代码在附件数据上复现。

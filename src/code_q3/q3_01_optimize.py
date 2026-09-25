@@ -2,7 +2,7 @@
 """
 q3_01_optimize.py — 问题三·Step1-4：全组合最优解 + 求解器互验 + 主图
 
-组合：g ∈ {指数, 幂函数, 对数} × C ∈ {1e19..1e25 每十倍} × L_ctx ∈ C7 五档 × Q0 ∈ {主 0.988, 副 0.889}
+组合：g ∈ {指数, 幂函数, 对数} × C ∈ {1e19..1e25 每十倍} × L_ctx ∈ C7 五档 × Q0 ∈ {主 0.661, 副 pile_cc}
      = 3 × 7 × 5 × 2 = 210 组最优解（赛题建议的 1e19/1e22/1e24 三档全部包含）
 互验：① 本求解器 vs 实现思路中的"粗网格穷举"（N 每十倍 40 点 × Q 100 点）
      ② Δg=0 区域 vs 闭式 N* = [αÃ/βB]^{1/(α+β)}(C/κ)^{β/(α+β)}
@@ -15,7 +15,7 @@ from q3_00_model import (PAR, ETA, LCTX_CRIT, Q0_MAIN, Q0_WEB, G_FUNCS, G_LIST,
                          N_star_closed, setup_cjk_matplotlib)
 
 C_MAIN = 10.0 ** np.arange(19, 26)
-Q0S = {"主口径p*加权": Q0_MAIN, "副口径网页c4": Q0_WEB}
+Q0S = {"主口径p*加权": Q0_MAIN, "副口径网页pile_cc": Q0_WEB}
 
 
 def run_grid():
@@ -150,11 +150,11 @@ if __name__ == "__main__":
     # F3：N*、D*、D/N
     fig, axes = plt.subplots(1, 3, figsize=(14, 4.2))
     for g in G_LIST:
-        s = S[(S.Q0口径 == "副口径网页c4") & (S.g == g) & (S.L_ctx == 2048)]
+        s = S[(S.Q0口径 == "副口径网页pile_cc") & (S.g == g) & (S.L_ctx == 2048)]
         axes[0].plot(s.log10C, np.log10(s.N), color=col[g], label=g)
         axes[1].plot(s.log10C, np.log10(s.D), color=col[g], label=g)
         axes[2].plot(s.log10C, s.DN, color=col[g], label=g)
-    s = S[(S.Q0口径 == "副口径网页c4") & (S.g == "对数型") & (S.L_ctx == 2048)]
+    s = S[(S.Q0口径 == "副口径网页pile_cc") & (S.g == "对数型") & (S.L_ctx == 2048)]
     kappa = 6 + ETA * 2048
     axes[0].plot(s.log10C, np.log10(N_star_closed(10 ** s.log10C, 1.0, kappa)), "k--", lw=1,
                  label="闭式解(Q=1,Δg=0)")

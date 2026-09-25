@@ -1,158 +1,138 @@
 \subsection{问题二的模型建立与求解}
 
-\subsubsection{数据口径与经典标度律}
+\subsubsection{模型建立}
 
-问题二以验证集交叉熵 $L$ 为可观测结果，研究参数量 $N$、训练 token 数 $D$、数据质量 $Q$ 及领域配比 $\bp$ 的作用。附件 A 与附件 B 使用了同名指标 $L$，但训练语料、分词器和验证集可能不同；因此“同为交叉熵”提供了建立共同模型的入口，不代表各表的绝对损失水平可直接拼接。下文在同一数据源内估计参数，跨来源只比较趋势，并把 A、B 之间的映射写成显式假设。
+\textbf{建模思路。}经典标度律只有 $N$ 与 $D$。本文保持 Chinchilla 的加式骨架，把质量写成可约损失上的乘性耦合，并把配比写成总损失上的对数可加项。$Q=1$ 且 $\bp=\bp^*$ 时，新公式退化为经典形式。质量项的具体形状不先验指定，而在同一基线上用嵌套族让数据裁决。
 
-B1 含 1{,}176 行、覆盖 8 个 Pythia 模型。将表中以十亿为单位的 $N$ 换算为参数个数、$D$ 换算为 token 个数后，以网格搜索选择 $\alpha,\beta$，并在每组指数下最小二乘估计 $E,A,B$，得到经典基线
+\textbf{数据审计。}B1 与 Hoffmann 等（2022）的常数吻合到 $\mathrm{RMSE}=1.6\times10^{-4}$，是公式生成的无噪声锚点，不能当作“Pile 语料 $\Leftrightarrow Q_{\mathrm B}=1$”的实证。在 B6/B7 的 $N\times D\times Q$ 网格上，去掉基线后的质量效应与 $(1-Q)$ 呈线性关系（图~\ref{fig:q2rev}），分档 $\Delta(Q)$ 对 $(1-Q)$ 的 $R^2=0.997$。B8 与 B6/B7 在相同格点上的相关为 $-0.03$，且损失随 $Q$ 上升，因此不参与联合拟合。B6/B7 为半合成数据，下文的 $\kappa_N,\kappa_D,k_0$ 不得表述为真实训练的观测。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.95\textwidth]{q12_F8_reverse_engineering.png}
+\caption{附件 B 的逆向分析：B1 锚点（左）、B6/B7 残差对 $(1-Q)$ 的线性结构（中）、B8 与 B6/B7 的不一致（右）}
+\label{fig:q2rev}
+\end{figure}
+
+\textbf{主模型。}交叉验证选出的广义标度律为
 \begin{equation}
-L_0(N,D)=E+AN^{-\alpha}+BD^{-\beta},\qquad
-(E,A,\alpha,B,\beta)=(1.6901,406.39,0.34,410.59,0.28).
-\label{eq:chinchilla}
-\end{equation}
-B1 上的拟合 RMSE 为 $1.5\times10^{-4}$。用 Hoffmann 等人的已发表系数直接代入 B1，RMSE 亦约为 $1.6\times10^{-4}$\cite{hoffmann}。这表明 B1 具有很强的公式生成或公式重建特征；本文将其作为经典律的内部校准集，而不将其视作独立的真实泛化验证。
-
-B2 是以 Pythia 规律校准的半合成 Cerebras 轨迹，B3 是插值轨迹；本研究选用 B2 作族外趋势检查，B3 不另作独立验证。B4、B5 分别汇集跨族基准点和已发表标度律点。由于三者均不含质量变量，检验时取 $Q=1$，故它们只能检验经典 $N,D$ 趋势，不能检验质量效应是否跨族迁移。表~\ref{tab:q2_cross} 给出已有计算的结果。
-
-\begin{table}[H]
-\centering\small
-\caption{经典基线在跨来源数据上的趋势对照；绝对损失差异不作同口径解释}
-\label{tab:q2_cross}
-\begin{tabular}{lrrrr}
-\toprule
-数据 & 点数 & Spearman $\rho$ & 平均偏差（nats） & RMSE（nats）\\
-\midrule
-B2 Cerebras（半合成） & 1{,}029 & 0.788 & 1.178 & 1.243\\
-B4 跨族基准 & 57 & 0.983 & 0.221 & 0.293\\
-B5 已发表数据 & 44 & 0.959 & 0.021 & 0.198\\
-B10 大模型估算损失 & 128 & $>0.9999$ & $-0.0007$ & 0.0012\\
-\bottomrule
-\end{tabular}
-\end{table}
-
-B2 的半合成性质和较大的绝对偏差意味着其结果只能作为有限的趋势佐证。B4、B5 的排序相关较高，但不同验证语料和 tokenizer 会改变交叉熵基线，不能把平均偏差解释成模型误差已校准。B10 的损失是估算值；其与基线的近乎完全一致反映估算口径与基线的构造关系，不是独立预测成功。B9 提供 132 个百亿至万亿参数规模的模型配置，其中 128 个名称能与 B10 配对，另有 4 个无估算损失。现有程序只读取 B10，尚未按 B9 配置完成修订广义律的独立外推检验。
-
-B11 的模型族元数据用于解释 B4 的来源构成，B12 的检查点索引用于核查 B1 所覆盖的 Pythia 模型和检查点范围；二者均为来源审计资料，不作为额外损失观测或拟合样本。
-
-\subsubsection{附件 A、B 的质量映射与配比桥接}
-
-问题一给出 17 个配方域的主质量分 $q_d=Q_{\mathrm{final},d}$，当前接口的取值范围为 $[0.5091,0.7707]$。配比 $\bp=(p_1,\ldots,p_{17})$ 满足 $p_d\geq0$ 且 $\sum_dp_d=1$，其 A 侧加权质量定义为
-\begin{equation}
-Q_A(\bp)=\bar q(\bp)=\sum_{d=1}^{17}p_dq_d.
-\label{eq:qa_mix}
-\end{equation}
-当前问题一等权目标配比对应 $Q_A(\bp^*)=0.6609$。这与修订证明旧版本中的 $0.554$ 及区间 $[0.355,0.716]$ 不同，本文按当前冻结接口更新。旧版以 $Q_{\mathrm{ref}}=0.5608$ 作 Pile 归一化的数值也不沿用：B1 的公式生成特征不足以证明 $Q_B=1$ 对应 Pile 语料，且映射参数并未由 A、B 的损失共同识别。
-
-为把两附件放入同一结构，定义单域映射 $Q_B=\varphi(q)$，并要求混合语料使用同一映射：
-\begin{equation}
-Q_B(\bp)=\varphi\!\left(Q_A(\bp)\right),\qquad
-\varphi(q)=1-b(q^*-q),\quad b>0.
-\label{eq:qmix}
-\end{equation}
-这里 $Q_A$ 是问题一质量评分，$Q_B$ 是 B6/B7 的实验变量；二者取值相同不是数据事实，而是特定锚点下的映射假设。要从损失结构推出映射形式，作如下条件假设：
-\begin{itemize}
-  \item H0：领域与混合语料共用同一个 $\varphi$；
-  \item H1：固定 $(N,D)$ 时，混合语料的质量惩罚按 token 占比可加，即 $\operatorname{Pen}_{\mathrm{mix}}(\bp)=\sum_dp_d\operatorname{Pen}(Q_{B,d})$；
-  \item H2：固定 $(N,D)$ 时，B 侧惩罚为 $\operatorname{Pen}(Q_B)=\Phi(N,D)(1-Q_B)$，其中 $\Phi(N,D)>0$，且不依赖 $Q_B$。
-\end{itemize}
-
-由 H0--H2，且 $\sum_dp_d=1$，可得
-\begin{equation}
-\varphi\!\left(\sum_dp_dq_d\right)=\sum_dp_d\varphi(q_d).
-\label{eq:q_affine_jensen}
-\end{equation}
-\textbf{命题：}若至少两个领域质量不同，式~\eqref{eq:q_affine_jensen} 对所有可行配比成立，当且仅当 $\varphi$ 在 $I=[\min_dq_d,\max_dq_d]=[0.5091,0.7707]$ 上为仿射函数。\textbf{证明：}取质量最小和最大的两个领域，分别记为 $q_{\min},q_{\max}$。令配比只在这两个领域间变化，则对任意 $\lambda\in[0,1]$ 有 $\varphi((1-\lambda)q_{\min}+\lambda q_{\max})=(1-\lambda)\varphi(q_{\min})+\lambda\varphi(q_{\max})$。令 $q=(1-\lambda)q_{\min}+\lambda q_{\max}$，即得 $I$ 上的仿射表达；反向代入即可验证。证毕。
-
-该命题是 H0--H2 下的条件性结论，不是数据无条件证明的物理规律。尤其 H1 不能由现有附件直接检验：A 侧损失随配比的响应包含组成匹配效应，B 侧没有同一配比下的质量操纵实验。当前 $I$ 不含 $q=1$，因此选择 $q^*=1,b=1$、令 $Q_B=Q_A$，还需 H5“仿射映射可延伸至 $I$ 外”。这一主锚点符合题面提出的自然退化设计，但数据不能裁决 $q^*,b$；论文中的质量数值和下游结论应对该锚点保持敏感性说明。
-
-附件 A 与附件 B 的损失可以用于检查桥接假设，却不足以单独确定映射参数。问题一交互表中 13 个验证域有 6 个质量交互系数的区间不含 0，其中 5 个为负、1 个为正；符号不一致说明在控制配比组成后，A 侧仍不能提供稳定的单调质量效应标定。配比特征与质量分之间的相关、验证管线差异等都可能影响该估计；现有结果不能证明其中某一种解释必然成立。因此不以跨来源损失水平回归 $q^*,b$。
-
-配比还可能通过“域与验证任务是否匹配”影响损失，这一作用不能和 $Q_A(\bp)$ 的标量质量通道混为一谈。可将四变量结构写为待检验的桥接形式
-\begin{equation}
-L_{\mathrm{bridge}}(N,D,\bp)=\widetilde L\!\left(N,D,\varphi(Q_A(\bp))\right)\exp\{g_N(\bp)\},\qquad g_N(\bp^*)=0,
-\label{eq:q2_bridge}
-\end{equation}
-其中 $g_N$ 表示配比组成的额外效应。B6/B7 不含 $\bp$，无法估计该项；附件 A 的 A6--A11 按训练/检验约定只作留出评估，不能拿来拟合 $g_N$ 后又称为独立检验。因此式~\eqref{eq:q2_bridge} 的配比尺度修正以及完整四变量联合律尚未标定、验证。问题一的局部迁移矩阵（式~\eqref{eq:q1_transfer}）仍可描述固定总配比附近各领域增减与验证损失的净关联，但矩阵元素不是成对交互系数，不能单独证明领域对的互补或替代机制。
-
-\subsubsection{含质量项的广义标度律与估计}
-
-固定 $\bp=\bp^*$，令配比修正 $g_N(\bp^*)=0$。此时改变 $Q_B$ 表示在配方份额不变时进行域内筛选或其他质量提升；若只改变领域配比，则 $Q_B(\bp)=\varphi(\sum_dp_dq_d)$ 随 $\bp$ 联动。在经典基线之外，对 B 侧质量惩罚采用对 $1-Q_B$ 仿射、并允许其分别与参数量和 token 数相互作用的形式：
-\begin{equation}
-\boxed{
-\begin{aligned}
-\widetilde L(N,D,Q_B)
-&=E+AN^{-\alpha}\bigl[1+\kappa_N(1-Q_B)\bigr]
- +BD^{-\beta}\bigl[1+\kappa_D(1-Q_B)\bigr]+k_0(1-Q_B)\\
-&=L_0(N,D)+(1-Q_B)\Phi(N,D),\\
-\Phi(N,D)&=\kappa_NAN^{-\alpha}+\kappa_DBD^{-\beta}+k_0.
-\end{aligned}}
+\boxed{\;L=\bigl\{E+A N^{-\alpha}h_N(Q)+B D^{-\beta}h_D(Q)+k_0(1-Q)\bigr\}\,e^{s(N)[\bar f(\bp)-\bar f(\bp^*)]}\;}
 \label{eq:main}
 \end{equation}
-$Q_B=1$ 时式~\eqref{eq:main} 退化为式~\eqref{eq:chinchilla}。$\kappa_N$、$\kappa_D$ 分别表示质量与参数项、数据项的交互，$k_0$ 表示不随 $N,D$ 衰减的质量惩罚。该形式包含现有脚本中仅保留 $N$ 交互的简化模型，但本节参数由修订形式重新估计。
+其中 $h_N(Q)=1+\kappa_N(1-Q)$，$h_D(Q)=1+\kappa_D(1-Q)$，
+\[
+s(N)=\max\{1.003-0.077\log_{10}(N/10^6),\,0\}.
+\]
+$Q=1$ 且 $\bp=\bp^*$ 时，式~\eqref{eq:main} 退化为经典 Chinchilla 形式\cite{hoffmann}。$\kappa_N>\kappa_D$ 表示质量不足主要抬高参数项。$k_0(1-Q)$ 是不随规模衰减的质量地板。旧加性形式 $(1-Q)(k_0+k_1 N^{-\alpha})$ 是 $\kappa_D=0$ 处的特例（嵌套检验 $F=25.6$，$p=6\times10^{-7}$）。去掉地板的检验为 $F=109$，但该地板是 B6/B7 的生成特征：$N,D\to\infty$ 时 $L\to E+k_0(1-Q)$，外推到真实训练时须标注。
 
-B6 有 360 个半合成点，B7 是其扩展表，含原有 360 点和新增 90 点。固定 B1 基线参数后，以 B6 拟合三个质量系数，再只在 B7 新增的 90 点上作留出检验；另在 B7 全部 450 点上复算系数，检查估计稳定性。表~\ref{tab:q2_general_fit} 中的系数来自按式~\eqref{eq:main} 对原始数据作的 OLS 复算，不是现有接口文件的数值。B6--B7 均为半合成数据，因此检验支持的是该实验生成机制下的函数形式和跨扩展点稳定性，不等同于真实训练的因果验证。
+\textbf{配比渠道与质量口径。}按赛题要求，问题二不重复读取附件 A。$s(N)$ 由问题一 Step6 的三尺度系数漂移标定：把各验证域系数投影到 1M 的方向上，得 $s(1\mathrm{M})=1.00$、$s(60\mathrm{M})=0.87$、$s(1\mathrm{B})=0.77$，方向余弦不低于 $0.94$。1B 以上是外推。质量口径取仿射形式 $Q_{\mathrm B}=1-b(q^*-\bar q(\bp))$。$q^*$ 与 $b$ 不能由损失数据识别。主口径取题面建议的“完美教材 $\Leftrightarrow$ 经典式”：
+\begin{equation}
+Q_{\mathrm B}(\bp)=\bar q(\bp)=\sum_{i=1}^{17}p_i\,\hat Q_{d(i)},\qquad Q_0=\bar q(\bp^*)=0.6609,
+\label{eq:qmix}
+\end{equation}
+副口径取“当前推荐配比语料 $\Leftrightarrow$ 经典式”，$Q_{\mathrm B}=\bar q(\bp)/0.6609$，此时 $Q_0=1$。$\kappa_N,\kappa_D,k_0$ 在附件 B 自身的 $Q$ 网格上估计，与锚点无关。早期 Pile 锚点 $Q_{\mathrm{ref}}=0.5608$ 已废弃。17 个域质量的凸包为 $[0.509,0.771]$，凸包外的延拓是额外假设。配比的域结构由迁移矩阵 $T$ 单独描述。问题一的交互系数在显著域中多数反号，因此不把质量与配比合并成单一乘子。问题三的主口径即式~\eqref{eq:qmix} 的 $Q_0=0.6609$，网页副口径取 pile\_cc 的域质量 $0.676$。
+
+\subsubsection{求解方法}
+
+\textbf{两步拟合。}第一步在 B1 上确定基线 $L_0=1.6901+406.4N^{-0.340}+410.6D^{-0.280}$。第二步固定基线，在 B7（含 B6 全部 360 点）的 450 个点上比较嵌套族：经典式、只耦合数据项、只耦合参数项、整体乘子、两项自由耦合，以及加上地板项。质量乘子同时比较线性 $1+\kappa(1-Q)$、幂 $Q^{-\kappa}$ 和指数 $e^{\kappa(1-Q)}$。裁决用五折交叉验证、留一规模交叉验证、12B 外推和嵌套 $F$ 检验（表~\ref{tab:forms}）。参数区间用残差 bootstrap（$B=300$）估计。
 
 \begin{table}[H]
 \centering\small
-\caption{广义质量项的 B6 拟合与 B7 扩展点检验}
-\label{tab:q2_general_fit}
-\begin{tabular}{lrrrrr}
+\caption{质量项形式选择（五折 cv-RMSE；数据噪声水平 $\sigma\approx0.05$）}
+\label{tab:forms}
+\begin{tabular}{llc}
 \toprule
-数据与用途 & $\kappa_N$ & $\kappa_D$ & $k_0$ & RMSE & 平均残差\\
+候选形式 & 所属族 & cv-RMSE \\
 \midrule
-B6，拟合（360 点） & 0.4297 & 0.1395 & 0.1417 & 0.0515 & 0.0002\\
-B7 新增 90 点，留出检验 & -- & -- & -- & 0.0416 & 0.0007\\
-B7 全部 450 点，复算 & 0.4313 & 0.1404 & 0.1408 & 0.0497 & 0.0003\\
+\textbf{耦合 + 地板（主）}\ $h_N,h_D,k_0$ & 线性乘性耦合 & $\mathbf{0.0497}$ \\
+旧加性\ $(1-Q)(k_0+k_1N^{-\alpha})$ & $\kappa_D=0$ 特例 & $0.0512$ \\
+幂形状\ $Q^{-\kappa}$ & 乘性耦合 & $0.0817$ \\
+有效数据\ $\kappa_N=0$ & 文献口径 & $0.0979$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-B6 拟合与 B7 新增点的误差均约为 $0.05$ 的半合成噪声量级。B7 全样本复算与 B6 系数接近，支持该线性惩罚在 B6/B7 扩展设计中的稳健性。相较之下，当前仓库中的 \texttt{q2\_01\_fit.py}、T21 和 \texttt{P2\_scaling\_law.json} 仍实现较简化的 $(1-Q_B)(k_0+k_1N^{-\alpha})$ 形式，未包含 $\kappa_D$；它们保存的 $k_0=0.1922,k_1=175.29$ 不应与表~\ref{tab:q2_general_fit} 的重新估计混用。新形式尚未同步到代码和下游接口，问题三、四使用该式前需重算并核对各自的质量锚点。
+主模型的 cv-RMSE 达到噪声水平。二次项检验 $t=-0.35$，幂形状被否决。只作用于数据项的文献口径在单参数模型中最差。bootstrap 中 $P(\kappa_N>\kappa_D)=P(\kappa_D>0)=P(k_0>0)=1$。
 
-B8 是另一张半合成大规模表。其与 B6/B7 同 $(N,D,Q)$ 点损失的相关系数为 $-0.026$，且 B8 内部损失随 $Q$ 上升的方向与 B6/B7 相反；该表还存在下限截断。因此 B8 不并入拟合，也不作为新广义律的正向外部验证。它显示质量项对不同附件生成口径并不稳健，必须将模型适用性限制在 B6/B7 所支持的范围。
+\begin{table}[H]
+\centering\small
+\caption{广义标度律参数估计（括号内为残差 bootstrap 95\% CI）}
+\label{tab:params}
+\begin{tabular}{cccccccc}
+\toprule
+$E$ & $A$ & $\alpha$ & $B$ & $\beta$ & $\kappa_N$ & $\kappa_D$ & $k_0$ \\
+\midrule
+$1.6901$ & $406.39$ & $0.34$ & $410.59$ & $0.28$ &
+\makecell{$0.431$\\ {\footnotesize$[0.390,0.473]$}} &
+\makecell{$0.140$\\ {\footnotesize$[0.085,0.195]$}} &
+\makecell{$0.141$\\ {\footnotesize$[0.114,0.168]$}} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsubsection{边际效应、弹性与质量—规模替代}
+\subsubsection{结果与分析}
 
-以下解析式均针对式~\eqref{eq:main}，且在 $\bp=\bp^*$ 下成立。定义 $h_N(Q_B)=1+\kappa_N(1-Q_B)$、$h_D(Q_B)=1+\kappa_D(1-Q_B)$，则
-\begin{equation}
-\frac{\partial\widetilde L}{\partial Q_B}=-\Phi(N,D),\qquad
-\varepsilon_N=-\frac{\alpha AN^{-\alpha}h_N}{\widetilde L},\quad
-\varepsilon_D=-\frac{\beta BD^{-\beta}h_D}{\widetilde L},\quad
-\varepsilon_Q=-\frac{Q_B\Phi}{\widetilde L}.
-\label{eq:q2_elasticities}
-\end{equation}
-质量的绝对边际效应在此形式下不随 $Q_B$ 变化，但会随模型规模与训练 token 数改变。估计的 $k_0>0$ 还意味着
-\begin{equation}
-\lim_{N,D\to\infty}\widetilde L=E+k_0(1-Q_B),
-\label{eq:q2_floor}
-\end{equation}
-即模型规模不能消除全部质量惩罚。按 B6 点估计，$Q_B=0.5$ 与 $Q_B=1$ 的极限损失差为 $0.071$ nats；这是半合成模型推论，不应视作真实模型的已验证下界。
+\textbf{跨源检验。}在 $Q=1$ 的切片上，主模型与观测的 Spearman 相关为：scaling\_baseline（57 点）$0.983$，published（44 点）$0.959$，平均偏差分别为 $0.22$ 与 $0.02$ nats。趋势一致，水平偏移来自 tokenizer 与验证集差异，不用于标定参数。B2 的 Spearman 为 $0.788$、偏差为 $1.18$ nats，仅作定性佐证。B9/B10 的百亿以上对照中，B10 本身就是 $Q=1$ 的公式值；$Q_0=0.661$ 相对 $Q=1$ 的损失缺口中位数为 $0.063$，约占可约损失的 $30\%$，且 B10 为估算值。
 
-为刻画有限幅度的质量改善，令提高量为 $\delta>0$，比较固定质量 $Q_B$ 下扩大参数至 $N'$，与固定 $N$ 将质量提高到 $Q_B+\delta$。由 $\widetilde L(N',D,Q_B)=\widetilde L(N,D,Q_B+\delta)$ 得
+\textbf{解析命题。}以下四条命题在 $\bp=\bp^*$ 时由式~\eqref{eq:main} 直接推出。等效替代的解析解与数值解相对误差为 $0$；$N^*$ 的相对误差小于 $10^{-6}$。$\bp\neq\bp^*$ 时，$s(N)$ 使配比与规模耦合，闭式不再成立：在 1B、$\Delta\bar f$ 的 P90 处，修正项约为该点 $\varepsilon_N$ 的 $7\%$，在 $7\times10^{10}$ 处约为 $26\%$。
+
+\begin{proposition}[弹性]\label{prop:el}
+记 $\Phi(Q)=\kappa_N A N^{-\alpha}+\kappa_D B D^{-\beta}+k_0$。损失对三个因素的弹性为
+$\displaystyle
+\varepsilon_N=-\frac{\alpha A N^{-\alpha}h_N(Q)}{L},\quad
+\varepsilon_D=-\frac{\beta B D^{-\beta}h_D(Q)}{L},\quad
+\varepsilon_Q=-\frac{Q\,\Phi(Q)}{L}.$
+在 $(N,D,Q)=(10^{10},10^{12},0.9)$ 处三者依次为 $-0.028$、$-0.025$、$-0.103$，即\emph{质量弹性约为参数弹性的 $3.7$ 倍}。$Q=0.6$ 时的有效规模为 $0.626N$ 与 $0.823D$。由于 $k_0$ 不随 $N$ 衰减，规模越大，质量的相对优势越明显。
+\end{proposition}
+
+\begin{proposition}[质量—参数等效替代及其边界]\label{prop:sub}
+固定 $D$，使 $L(N',D,Q)=L(N,D,Q+\delta)$ 成立的等效倍数为
 \begin{equation}
 \frac{N'}{N}=t^{-1/\alpha},\qquad
- t=\frac{h_N(Q_B+\delta)}{h_N(Q_B)}-
- \frac{\delta\left(\kappa_DBD^{-\beta}+k_0\right)}{AN^{-\alpha}h_N(Q_B)}.
-\label{eq:sub}
+t=\frac{h_N(Q+\delta)}{h_N(Q)}-\frac{\delta\,(\kappa_D B D^{-\beta}+k_0)}{A N^{-\alpha}h_N(Q)}.
 \end{equation}
-当且仅当 $t>0$ 时存在有限的等效参数量；$t\leq0$ 表示质量改善带来的损失下降超过参数规模在该模型下可提供的下降量。特别地，有限替代成立的条件可写成
-\begin{equation}
-N<N_{\max}=\left[\frac{A h_N(Q_B+\delta)}{\delta(\kappa_DBD^{-\beta}+k_0)}\right]^{1/\alpha}.
-\label{eq:q2_nmax}
-\end{equation}
-按 B6 点估计，在 $D=300$B、$Q_B=0.5$、$\delta=0.1$ 时，$N_{\max}\approx1.07\times10^{13}$。同一条件下，$N=10^9$ 时的参数等效倍数约为 $1.26$；$N=10^{10}$ 时约为 $1.48$。这些数值依赖半合成拟合与质量锚点，意义是给出模型内部的替代关系，不是已观测的工程收益。
+可替代当且仅当 $t>0$，即 $N<N_{\max}$。$D=3\times10^{11}$、$\delta=0.1$ 时，$N_{\max}$ 约为 $(0.7\text{--}1.1)\times10^{13}$。在算力最优点上，主口径 $Q_{\mathrm B}$ 从 $0.5$ 提到 $0.6$，等效于参数扩大 $1.29$ 倍（$C=10^{20}$）、$1.42$ 倍（$C=10^{22}$）、$1.77$ 倍（$C=10^{24}$）。副口径下同样的 $\Delta\bar q=0.1$ 折合 $\Delta Q_{\mathrm B}=0.151$，对应 $1.47$、$1.73$、$2.48$ 倍。固定 $D=3\times10^{11}$、$\delta=0.1$ 时，$N=10^9$ 处 $Q$ 从 $0.9$ 提到 $1.0$ 等效 $1.32$ 倍，$N=10^{10}$ 处为 $1.59$ 倍。同一份质量改进，模型越大价值越高；超过 $N_{\max}$ 后，任何有限的扩参都无法替代这次质量提升。
+\end{proposition}
 
-在算力约束 $6ND=C$ 下，将 $D=C/(6N)$ 代入式~\eqref{eq:main}，一阶条件给出
+\begin{proposition}[质量地板]\label{prop:fl}
+$\lim_{N,D\to\infty}L=E+(1-Q)k_0$。$Q=0.5$ 的地板比 $Q=1$ 高 $0.070$ nats。这是半合成数据的生成特征，为问题三的付费提质提供机制，但不宜当成真实语料的观测下界。
+\end{proposition}
+
+\begin{proposition}[算力最优配置随质量移动]\label{prop:opt}
+在约束 $6ND=C$ 且 $\bp=\bp^*$ 下，
 \begin{equation}
-N^*(C,Q_B)=
-\left[\frac{\alpha A h_N(Q_B)}{\beta B h_D(Q_B)}\right]^{\frac{1}{\alpha+\beta}}
-\left(\frac{C}{6}\right)^{\frac{\beta}{\alpha+\beta}}.
+N^{*}(C,Q)=\Bigl[\frac{\alpha A\,h_N(Q)}{\beta B\,h_D(Q)}\Bigr]^{\frac{1}{\alpha+\beta}}
+\Bigl(\frac{C}{6}\Bigr)^{\frac{\beta}{\alpha+\beta}},\qquad \frac{\beta}{\alpha+\beta}=0.452.
 \label{eq:nstar}
 \end{equation}
-由于本次 B6 点估计 $\kappa_N>\kappa_D$，模型预测低质量时最优参数规模较大；$Q_B=0.3$ 与 $Q_B=1$ 的最优 $N^*$ 比值约为 1.31。该方向性结论来自式~\eqref{eq:main}，数值是本次重估后的解析代入，尚未写回现有 T25 或下游优化接口。
+因为 $\kappa_N>\kappa_D$，质量越低，最优模型越大：$Q_{\mathrm B}=0.3$ 时的 $N^*$ 是 $Q_{\mathrm B}=1$ 时的 $1.32$ 倍。$C=10^{22}$ 时，最优 token/参数比由 $Q=0.3$ 时的 $36$ 升至 $Q=1$ 时的 $63$。这一命题是问题三结构性转移的机制来源。
+\end{proposition}
 
-\subsubsection{稳健性、外推边界与交付状态}
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{q12_F21_theory.png}
+\caption{解析理论三联图：等损失线（左）、等效参数倍数（中）、$N^*(C,Q)$（右）}
+\label{fig:theory}
+\end{figure}
 
-本节证据的强弱有明确层次：B1 用于经典基线校准；B4、B5 支持经典趋势跨来源的一致性；B6 拟合、B7 新增 90 点留出用于半合成质量项的有限检验；B8 显示另一半合成来源与该质量方向不一致；B9/B10 只能说明大模型配置与估算损失的覆盖范围，不能构成真实大模型验证。B2 也是半合成数据，不能替代真实族外测试。B11、B12 仅支持来源和检查点审计。
+\textbf{单位算力的比较。}在训练算力的最优点上，比较每 FLOP 用于提质与用于扩参数的边际损失下降，$R_{QN}=\mathrm{MU}_Q/\mathrm{MU}_N$。$Q_0=0.661$ 时，$C=10^{19}$ 的比值为 $1.16/0.63/1.39$（指数型/幂函数型/对数型），$C=10^{22}$ 为 $40/22/49$，$C=10^{24}$ 为 $502/275/604$。低预算下“提质还是扩参数”取决于成本函数；$C\ge10^{21}$ 后三种成本函数都是提质更划算。去掉地板后比值约减半，方向不变。地板在 $\Phi$ 中的份额随规模从 $29\%$ 升到 $70\%$，所以大预算下的这一比较依赖 B6/B7 的地板项。
 
-因此，当前可以报告的结论是：在 B6/B7 所代表的半合成机制内，广义损失的质量惩罚可用关于 $1-Q_B$ 的仿射项近似，且质量对 $N,D$ 的交互在 B6 与 B7 扩展点间较稳定；经典 $N,D$ 趋势在 B4/B5 上具有较好的排序一致性。尚不能据此断言真实训练中的质量效应、B8 的相反结果、或者百亿以上质量效应已经得到验证。A、B 的统一四变量模型还依赖 H0--H2 的聚合假设、锚点假设及尚未估计的配比修正 $g_N(\bp)$；相关参数和下游结论需在训练/检验边界内重新标定后再使用。
+\textbf{领域间的替代与互补。}配比通道有两部分。第一部分是 $Q_{\mathrm B}(\bp)$：换入质量较高的域，会同时降低 $h_N$、$h_D$ 和地板项。第二部分是迁移矩阵 $T$（表~\ref{tab:q2tm}）：13 个自域效应全部为负，各域补自己最有效；非对角负值是互补，最强的是 stackexchange 对 github（$-0.32$）与 github 对 stackexchange（$-0.21$）；正值是挤占，dm\_mathematics 一列除 ubuntu\_irc 外均为正。问题三的联立优化表明，联合降损几乎全部来自配比结构 $m(\bp)$，而不是 $Q_{\mathrm B}(\bp)$ 这一条通道。
+
+\begin{table}[H]
+\centering\small
+\caption{迁移矩阵 $T_{iv}$ 中的代表性互补与替代关系（节选）}
+\label{tab:q2tm}
+\begin{tabular}{llcl}
+\toprule
+增配域 $i$ & 验证域 $v$ & $T_{iv}$ & 关系 \\
+\midrule
+stackexchange & github & $-0.32$ & 互补（问答 $\to$ 代码） \\
+github & stackexchange & $-0.21$ & 互补（代码 $\to$ 问答） \\
+pubmed\_central & pubmed\_abstracts & $-0.16$ & 互补（全文 $\to$ 摘要） \\
+stackexchange & arxiv & $-0.15$ & 互补 \\
+pile\_cc & wikipedia\_en & $-0.11$ & 互补（网页 $\to$ 百科） \\
+enron\_emails & dm\_mathematics & $+0.50$ & 替代（挤占） \\
+pile\_cc & dm\_mathematics & $+0.26$ & 替代（挤占） \\
+\bottomrule
+\end{tabular}
+\end{table}

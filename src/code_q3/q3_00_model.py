@@ -3,7 +3,8 @@
 q3_00_model.py — 问题三公共模型：广义标度律 + 三项成本 + 向量化最优化求解器
 
 优化问题（赛题原文）
-    min_{N,D,Q}  L(N,D,Q) = E + Ã(Q)N^-α + B·D^-β + (1-Q)k0 ,  Ã(Q)=A+k1(1-Q)
+    min_{N,D,Q}  L = E + A N^-α h_N(Q) + B D^-β h_D(Q) + k0(1-Q)
+                 h_X(Q) = 1 + κ_X(1-Q)
     s.t.  6ND + D[g(Q)-g(Q0)]₊ + ηNDL_ctx ≤ C ,   Q0 ≤ Q ≤ 1
 
 降维：三项成本都 ∝ D，且 L 对 D 严格递减 ⇒ 约束取等
@@ -24,17 +25,16 @@ TAB, FIG, IFACE = f"{OUT}/tables", f"{OUT}/figures", f"{OUT}/interface"
 for _d in (TAB, FIG, IFACE):
     os.makedirs(_d, exist_ok=True)
 
-P2 = json.load(open(f"{ROOT}/outputs_q2/interface/P2_scaling_law.json"))
-P1 = json.load(open(f"{ROOT}/outputs_q1/interface/P1_summary.json"))
+P2 = json.load(open(f"{ROOT}/outputs_q2/interface/P2_scaling_law.json", encoding="utf-8"))
 PAR = dict(E=P2["E"], A=P2["A"], al=P2["alpha"], B=P2["B"], be=P2["beta"],
-           k0=P2["k0"], k1=P2["k1"])
+           kappa_N=P2["kappa_N"], kappa_D=P2["kappa_D"], k0=P2["k0"])
 
 ETA = 2e-4                                   # 赛题给定
 LCTX_CRIT = 6 / ETA                          # 30000，解析临界值
-Q_REF = 0.5608                               # 问题二 B 口径锚：Q_B = Q1 / 0.5608
-# Q0 双口径：主=默认配比 p* 的加权质量；副=网页语料 c4（A1 域级中位数 0.4986）
-Q0_MAIN = min(P1["Qbar_pstar_eqweight"] / Q_REF, 1.0)       # ≈ 0.9878
-Q0_WEB = 0.4986468336059278 / Q_REF                          # ≈ 0.8892
+# 主口径：Q_B = q̄(p)，Q0 = q̄(p*)。不再除以已废弃的 Pile 锚点 0.5608。
+Q0_MAIN = float(P2["Q0_main"])                              # 0.6609
+# 副口径：网页域 pile_cc 在同一锚点下的域质量（Q_B = q，不另做缩放）
+Q0_WEB = 0.676134904846549
 
 # ---------------- 三种质量成本函数（附录 B）：(g, g') ----------------
 G_FUNCS = {
@@ -49,19 +49,23 @@ G_LIST = list(G_FUNCS)
 LCTX_C7 = [2048, 4096, 8192, 32768, 131072]      # C7 max_position_embeddings 的全部取值
 
 
-def Atil(Q, p=PAR):
-    return p["A"] + p["k1"] * (1 - Q)
+def hN(Q, p=PAR):
+    return 1.0 + p["kappa_N"] * (1.0 - Q)
+
+
+def hD(Q, p=PAR):
+    return 1.0 + p["kappa_D"] * (1.0 - Q)
 
 
 def loss(N, D, Q, p=PAR):
-    return (p["E"] + Atil(Q, p) * N ** -p["al"] + p["B"] * D ** -p["be"]
-            + (1 - Q) * p["k0"])
+    return (p["E"] + p["A"] * hN(Q, p) * N ** -p["al"]
+            + p["B"] * hD(Q, p) * D ** -p["be"] + (1.0 - Q) * p["k0"])
 
 
 def N_star_closed(C, Q, kappa, p=PAR):
-    """Δg=0 时的闭式解（问题二 T4 推广：单价 6 → κ=6+ηL_ctx）"""
+    """Δg=0 时的闭式解（单价 6 → κ=6+ηL_ctx）"""
     al, be = p["al"], p["be"]
-    return ((al * Atil(Q, p) / (be * p["B"])) ** (1 / (al + be))
+    return ((al * p["A"] * hN(Q, p) / (be * p["B"] * hD(Q, p))) ** (1 / (al + be))
             * (C / kappa) ** (be / (al + be)))
 
 
@@ -150,13 +154,14 @@ REGIME_NAME = {0: "Q0角点(不提质)", 1: "内点(部分提质)", 2: "Q=1角�
 def phi_ratio(C, g, Lctx, Qeval, Q0, p=PAR, eta=ETA):
     """KKT 解析判据 Φ：在质量固定为 Qeval 时的最优 (N,D) 处，
         Φ = 提质的边际 Loss 收益 / 提质挤占 D 的边际 Loss 损失
-          = (k0 + k1 N^-α)(κN + Δg) / (β B D^-β g'(Qeval))
+          = (κ_N A N^-α + κ_D B D^-β + k0)(κN + Δg) / (β B D^-β g'(Qeval))
     Φ(Q0)<1 ⇔ 角点 Q*=Q0 满足 KKT（不提质）；Φ(1)>1 ⇔ Q*=1 角点。"""
     kappa = 6 + eta * Lctx
     gf, gd = G_FUNCS[g]
     dg = max(gf(Qeval) - gf(Q0), 0.0)
     _, x = _profile(np.asarray(C, float), np.asarray(Qeval, float), dg, kappa, p)
     N = 10.0 ** x; D = C / (kappa * N + dg)
-    num = (p["k0"] + p["k1"] * N ** -p["al"]) * (kappa * N + dg)
+    num = (p["kappa_N"] * p["A"] * N ** -p["al"]
+           + p["kappa_D"] * p["B"] * D ** -p["be"] + p["k0"]) * (kappa * N + dg)
     den = p["be"] * p["B"] * D ** -p["be"] * gd(Qeval)
     return float(num / den)

@@ -5,13 +5,13 @@ q3_02_transition.py — 问题三·Step5/7：结构性转移的定义、识别�
 【定义】记 x*(C) = (N*,D*,Q*) 为预算 C 下的最优解，称 C_crit 处发生结构性转移，若：
   口径 A（KKT 活跃约束集切换，主定义）：
       𝒜(C) = { Q≥Q0 活跃 | 无约束活跃(内点) | Q≤1 活跃 } 在 C_crit 两侧不同。
-      解析识别：Φ(C) = [(k0+k1N^-α)(κN+Δg)] / [βB D^-β g'(Q)] 在 Q=Q0 处穿越 1。
+      解析识别：Φ(C) = [(κ_N A N^-α+κ_D B D^-β+k0)(κN+Δg)] / [βB D^-β g'(Q)] 在 Q=Q0 处穿越 1。
       （Φ = 提质边际收益 / 提质挤占数据的边际损失；Φ<1 ⇒ 不提质是 KKT 点）
   口径 B（份额弹性符号翻转）：e_Q(C) = d ln s_Q / d ln C 由正变负（s_Q 取极大）。
   口径 C（配置比斜率拐点）：固定 Q 时 D*/N* ∝ C^{(α-β)/(α+β)}（常斜率 0.0968）；
       偏差 δ(C) = d ln(D/N)/d ln C − (α−β)/(α+β) 取极值处即转移。
 【识别方法】细扫描 + 二分法（精度 1e-3 dex）；三口径 C_crit 相差 < 0.5 dex 视为一致。
-【敏感性】L_ctx 五档、Q0 相图、η ±50%、问题二 bootstrap 500 组 (E,A,B,k0,k1)。
+【敏感性】L_ctx 五档、Q0 相图、η ±50%、问题二 bootstrap (E,A,B,κ_N,κ_D,k0)。
 产出：tables/T2_*.csv, interface/P3_structural_transition.json, P3_sensitivity_Lctx.csv, F5-F7
 """
 import json
@@ -21,7 +21,7 @@ from q3_00_model import (PAR, ETA, LCTX_CRIT, Q0_MAIN, Q0_WEB, G_LIST, LCTX_C7, 
                          IFACE, ROOT, loss, solve, c_crit, phi_ratio, N_star_closed,
                          setup_cjk_matplotlib)
 
-Q0S = {"主口径p*加权": Q0_MAIN, "副口径网页c4": Q0_WEB}
+Q0S = {"主口径p*加权": Q0_MAIN, "副口径网页pile_cc": Q0_WEB}
 SLOPE0 = (PAR["al"] - PAR["be"]) / (PAR["al"] + PAR["be"])
 
 
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     ER = pd.DataFrame(er)
     ER.to_csv(f"{TAB}/T2_eta_sensitivity.csv", index=False, encoding="utf-8-sig")
 
-    # ============ 5. bootstrap（问题二 500 组参数） ============
+    # ============ 5. bootstrap（问题二联合 bootstrap） ============
     z = np.load(f"{ROOT}/outputs_q2/interface/P2_bootstrap.npz")
     smp, cols = z["samples"], list(z["cols"])
     pb = dict(PAR)
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     axes[0].set_xlabel("log₁₀ C"); axes[0].set_ylabel("Φ = 提质边际收益 / 挤占数据损失")
     axes[0].set_title("口径A：KKT 判据 Φ 穿越 1"); axes[0].legend(fontsize=7, ncol=2)
     for g in G_LIST:
-        s = S[(S.g == g) & (S.L_ctx == 2048) & (S.Q0口径 == "副口径网页c4")].sort_values("log10C")
+        s = S[(S.g == g) & (S.L_ctx == 2048) & (S.Q0口径 == "副口径网页pile_cc")].sort_values("log10C")
         axes[1].plot(s.log10C, s.s_Q * 100, color=col[g], label=g)
         x = s.log10C.values * np.log(10)
         axes[2].plot(s.log10C, np.gradient(np.log(s.DN.values), x), color=col[g], label=g)

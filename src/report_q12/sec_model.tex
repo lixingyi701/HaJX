@@ -92,7 +92,7 @@ Q(x)=\prod_{j=1}^{25} z_j(x)^{\,w_j},
 
 \subsection{问题二：广义标度律的形式选择与拟合}\label{sec:m2fit}
 
-\textbf{两步拟合}。第一步在 B1 上网格搜索 $(\alpha,\beta)$ 并最小二乘定 $(E,A,B)$，得 $L_0=1.6901+406.4N^{-0.340}+410.6D^{-0.280}$（$\mathrm{RMSE}=1.5\times10^{-4}$；该表呈公式生成特征，故此步为无噪声锚定）。第二步固定基线，在 B6/B7（450 点 $N\times D\times Q$ 网格）上对质量项做五种候选形式的五折交叉验证：
+\textbf{两步拟合}。第一步在 B1 上网格搜索 $(\alpha,\beta)$ 并最小二乘定 $(E,A,B)$，得 $L_0=1.6901+406.4N^{-0.340}+410.6D^{-0.280}$（$\mathrm{RMSE}=1.5\times10^{-4}$；该表呈公式生成特征，故此步为无噪声锚定）。第二步固定基线，在 B7（450 点）上对嵌套族做五折交叉验证：
 
 \begin{table}[H]
 \centering\small
@@ -101,11 +101,9 @@ Q(x)=\prod_{j=1}^{25} z_j(x)^{\,w_j},
 \toprule
 候选形式 & cv-RMSE & 备注 \\
 \midrule
-加性 + 规模交互 $\;(1-Q)(k_0+k_1N^{-\alpha})$ & $\bm{0.0512}$ & \textbf{主模型}（达噪声下限） \\
-纯加性 $\;k(1-Q)$ & $0.0731$ & 缺规模交互 \\
-指数乘子 $\;D_{\mathrm{eff}}=De^{-\gamma(1-Q)}$ & $0.0985$ & 有效数据乘子族 \\
-线性乘子 $\;D_{\mathrm{eff}}=D(q_0+(1-q_0)Q)$ & $0.1030$ & （Muennighoff 风格） \\
-幂律乘子 $\;D_{\mathrm{eff}}=DQ^{\gamma}$ & $0.1050$ & 全体落败 \\
+耦合 + 地板（主） $\;h_N,h_D,k_0$ & $\bm{0.0497}$ & \textbf{主模型}（达噪声下限） \\
+旧加性 $\;(1-Q)(k_0+k_1N^{-\alpha})$ & $0.0512$ & $\kappa_D=0$ 特例 \\
+有效数据 $\;\kappa_N=0$ & $0.0979$ & 文献口径，单参数中最差 \\
 \bottomrule
 \end{tabular}
 \label{tab:forms}
@@ -114,26 +112,26 @@ Q(x)=\prod_{j=1}^{25} z_j(x)^{\,w_j},
 文献偏好的"质量折算有效数据量"乘子族（Muennighoff 风格）在本题数据上系统性落败——\emph{模型形式由交叉验证裁决而非先验借用}。主模型为
 
 \begin{equation}
-\boxed{\;L(N,D,Q)=E+\widetilde A(Q)\,N^{-\alpha}+B\,D^{-\beta}+(1-Q)\,k_0,\qquad
-\widetilde A(Q)=A+k_1(1-Q)\;}
+\boxed{\;L=\bigl\{E+A N^{-\alpha}h_N(Q)+B D^{-\beta}h_D(Q)+k_0(1-Q)\bigr\}\,e^{s(N)[\bar f(\bm p)-\bar f(\bm p^*)]}\;}
 \label{eq:main}
 \end{equation}
 
 \begin{table}[H]
 \centering\small
-\caption{广义标度律参数（残差 bootstrap $B=500$）}
+\caption{广义标度律参数（残差 bootstrap $B=300$）}
 \begin{tabular}{cccccccc}
 \toprule
-$E$ & $A$ & $\alpha$ & $B$ & $\beta$ & $k_0$ & $k_1$ & 噪声 $\sigma$ \\
+$E$ & $A$ & $\alpha$ & $B$ & $\beta$ & $\kappa_N$ & $\kappa_D$ & $k_0$ \\
 \midrule
 $1.6901$ & $406.4$ & $0.340$ & $410.6$ & $0.280$ &
-$\underset{[0.175,\,0.211]}{0.192}$ & $\underset{[156.6,\,193.0]}{175.3}$ & $0.051$ \\
+$\underset{[0.390,\,0.473]}{0.431}$ & $\underset{[0.085,\,0.195]}{0.140}$ &
+$\underset{[0.114,\,0.168]}{0.141}$ \\
 \bottomrule
 \end{tabular}
 \label{tab:params}
 \end{table}
 
-$Q=1$ 时式~\eqref{eq:main} 严格退化为经典 Chinchilla 形式（附件内锚定）。配比经问题一引入（题目规定不重复读取附件 A）：$\bar Q_{\mathrm B}(\bm p)=\sum_ip_i\hat Q_{{\mathrm B},d(i)}$ 将配比映射为语料质量代入 $Q$；配比的域结构效应由迁移矩阵 $T$ 单独描述——依据 \S\ref{sec:m1c} 的 $\lambda$ 符号发现，质量与配比不合并为单一乘子。
+其中 $h_N=1+\kappa_N(1-Q)$，$h_D=1+\kappa_D(1-Q)$，$s(N)=\max\{1.003-0.077\log_{10}(N/10^6),0\}$。$Q=1$ 且 $\bm p=\bm p^*$ 时式~\eqref{eq:main} 退化为经典 Chinchilla 形式。主口径 $Q_{\mathrm B}=\bar q(\bm p)$，$Q_0=0.6609$。配比经问题一接口引入，不重复读取附件 A；域结构效应由迁移矩阵 $T$ 单独描述。
 
 \textbf{跨源检验}。真实文献点上主模型预测与观测的 Spearman：scaling\_baseline（57 点）$0.983$、published（44 点）$0.959$，平均偏差 $0.22/0.02$ nats——趋势一致，绝对偏移源于 tokenizer 与验证集差异，符合"跨源只比趋势"的审计原则；B2（Cerebras 半合成）偏差 $1.18$ nats，仅作定性佐证。
 
@@ -142,33 +140,34 @@ $Q=1$ 时式~\eqref{eq:main} 严格退化为经典 Chinchilla 形式（附件内
 以下命题由式~\eqref{eq:main} 直接推导，全部与数值优化互验（相对误差 $<10^{-6}$）。
 
 \begin{proposition}[弹性]\label{prop:el}
+记 $\Phi=\kappa_N AN^{-\alpha}+\kappa_D BD^{-\beta}+k_0$，则
 $\displaystyle
-\varepsilon_N=-\frac{\alpha\widetilde A(Q)N^{-\alpha}}{L},\quad
-\varepsilon_D=-\frac{\beta BD^{-\beta}}{L},\quad
-\varepsilon_Q=-\frac{Q(k_0+k_1N^{-\alpha})}{L}.$
-在 $(N,D,Q)=(10^{10},10^{12},0.9)$ 处三者为 $-0.028/-0.024/-0.115$：\emph{质量弹性约为规模弹性的 4 倍}；且 $k_0$ 项不随 $N$ 衰减，规模越大质量的相对优势越明显。
+\varepsilon_N=-\frac{\alpha A N^{-\alpha}h_N}{L},\quad
+\varepsilon_D=-\frac{\beta B D^{-\beta}h_D}{L},\quad
+\varepsilon_Q=-\frac{Q\,\Phi}{L}.$
+在 $(N,D,Q)=(10^{10},10^{12},0.9)$ 处三者为 $-0.028/-0.025/-0.103$：\emph{质量弹性约为参数弹性的 $3.7$ 倍}。
 \end{proposition}
 
 \begin{proposition}[质量—参数等效替代及其边界]\label{prop:sub}
 固定 $D$，使 $L(N',D,Q)=L(N,D,Q+\delta)$ 的等效参数量
 \begin{equation}
-N'=N\Bigl[1-\frac{\delta\,(k_0+k_1N^{-\alpha})}{\widetilde A(Q)N^{-\alpha}}\Bigr]^{-1/\alpha},
+\frac{N'}{N}=t^{-1/\alpha},\quad
+t=\frac{h_N(Q+\delta)}{h_N(Q)}-\frac{\delta(\kappa_D BD^{-\beta}+k_0)}{AN^{-\alpha}h_N(Q)},
 \end{equation}
-当且仅当括号内为正时有限。数值：$Q\!:\!0.9\to1.0$ 在 $N=10^9$ 等效参数 $\times1.33$，在 $N=10^{10}$ 等效 $\times1.64$——同一份质量改进，模型越大越值钱；超过临界规模后任何有限扩参都无法替代该质量提升。
+当且仅当 $t>0$ 时有限。算力最优点上 $Q_{\mathrm B}:0.5\to0.6$ 等效参数 $1.29/1.42/1.77$ 倍（$C=10^{20}/10^{22}/10^{24}$）。同一份质量改进，模型越大越值钱。
 \end{proposition}
 
 \begin{proposition}[质量地板]\label{prop:fl}
-$\lim_{N,D\to\infty}L=E+(1-Q)k_0$。低质量造成\emph{规模不可救赎}的损失下界：$Q=0.5$ 的地板比 $Q=1$ 高 $0.096$ nats。此为问题三"付费提质"的理论必要性。
+$\lim_{N,D\to\infty}L=E+(1-Q)k_0$。$Q=0.5$ 的地板比 $Q=1$ 高 $0.070$ nats。该地板是 B6/B7 的生成特征，外推须标注。
 \end{proposition}
 
 \begin{proposition}[算力最优配置随质量移动]\label{prop:opt}
 约束 $6ND=C$ 下，
 \begin{equation}
-N^{*}(C,Q)=\Bigl[\frac{\alpha\widetilde A(Q)}{\beta B}\Bigr]^{\frac{1}{\alpha+\beta}}
-\Bigl(\frac{C}{6}\Bigr)^{\frac{\beta}{\alpha+\beta}},\qquad \frac{\beta}{\alpha+\beta}=0.452,
-\qquad \frac{\partial N^{*}}{\partial Q}<0 .
+N^{*}(C,Q)=\Bigl[\frac{\alpha A\,h_N(Q)}{\beta B\,h_D(Q)}\Bigr]^{\frac{1}{\alpha+\beta}}
+\Bigl(\frac{C}{6}\Bigr)^{\frac{\beta}{\alpha+\beta}},\qquad \frac{\beta}{\alpha+\beta}=0.452.
 \end{equation}
-质量越高，最优配置越偏"小模型、多数据"：$C=10^{22}$ 时最优 token/参数比从 $Q=0.3$ 的 27 升至 $Q=1$ 的 63。机制：低质数据抬高 $\widetilde A(Q)$，变相提高参数的边际收益。该命题给出问题三"结构性转移"的机制来源。
+因为 $\kappa_N>\kappa_D$，质量越低最优模型越大：$Q_{\mathrm B}=0.3$ 时的 $N^*$ 是 $Q_{\mathrm B}=1$ 时的 $1.32$ 倍。$C=10^{22}$ 时最优 token/参数比从 $Q=0.3$ 的 36 升至 $Q=1$ 的 63。
 \end{proposition}
 
 \begin{figure}[H]

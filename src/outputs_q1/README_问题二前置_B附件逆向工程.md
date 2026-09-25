@@ -1,3 +1,5 @@
+> **⚠️ Q 口径部分已过期（2026-09-25）。** B1 为公式生成、B8 不混用，这两条仍然成立。文中 \(Q_B=Q_1/0.5608\) 以及“主形式应选加性惩罚”已废弃。现行主模型是线性乘性耦合，见 `outputs_q2/证明过程_修订版.md`。
+
 # 问题二前置分析：B 附件逆向工程与 Q 口径反向修正
 
 > 2026-09-23。脚本 `code_q1/q2_00_reverse_engineering.py` 可全部复现；表 `T8_reverse_engineering.csv`、图 `F8_reverse_engineering.png`。

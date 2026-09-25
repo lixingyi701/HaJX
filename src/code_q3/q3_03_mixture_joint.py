@@ -15,7 +15,7 @@ q3_03_mixture_joint.py — 问题三·Step6：配比 p 的处理（主口径固�
 """
 import numpy as np
 import pandas as pd
-from q3_00_model import Q_REF, G_LIST, TAB, FIG, ROOT, solve, setup_cjk_matplotlib
+from q3_00_model import G_LIST, TAB, FIG, ROOT, solve, setup_cjk_matplotlib
 import sys, os
 sys.path.insert(0, os.path.join(ROOT, "code_q1"))
 from q1_00_common import clr  # noqa: E402
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     from q1_00_common import gbdt_predict  # noqa: E402
     with open(f"{ROOT}/outputs_q1/cache/step5_gbdt.pkl", "rb") as f:
         gb_models = pickle.load(f)          # 问题一搜索 p* 所用的 13 个验证域 GBDT（clr 输入）
-    Q_B = (ps.Q_domain / Q_REF).values
+    Q_B = ps.Q_domain.values          # 主口径 Q_B = q̄，不再除以 0.5608
     p_star = ps.p_star_eqweight.values
     p_uni = ps.p_uniform.values
 
