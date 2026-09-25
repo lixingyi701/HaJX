@@ -15,7 +15,8 @@ Q<Q0 不省钱却抬高 Loss ⇒ 可行域收缩为 Q∈[Q0,1]。
     外层：对 Q 做三级网格加密（41 点 × 3 级，最终步长 < 1e-5）+ 端点保护
 所有参数读自问题二接口，不重新估计。
 """
-import os, sys, json
+import os, sys, json, csv
+from pathlib import Path
 import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "code_q1"))
 from q1_00_common import ROOT, setup_cjk_matplotlib  # noqa: E402,F401
@@ -26,15 +27,24 @@ for _d in (TAB, FIG, IFACE):
     os.makedirs(_d, exist_ok=True)
 
 P2 = json.load(open(f"{ROOT}/outputs_q2/interface/P2_scaling_law.json", encoding="utf-8"))
+P1 = json.load(open(f"{ROOT}/outputs_q1/interface/P1_summary.json", encoding="utf-8"))
+if P2.get("q_mapping", {}).get("main", {}).get("name") != "identity":
+    raise ValueError("P2 主质量映射尚未冻结为 identity，不能运行 Q3")
 PAR = dict(E=P2["E"], A=P2["A"], al=P2["alpha"], B=P2["B"], be=P2["beta"],
            kappa_N=P2["kappa_N"], kappa_D=P2["kappa_D"], k0=P2["k0"])
 
 ETA = 2e-4                                   # 赛题给定
 LCTX_CRIT = 6 / ETA                          # 30000，解析临界值
-# 主口径：Q_B = q̄(p)，Q0 = q̄(p*)。不再除以已废弃的 Pile 锚点 0.5608。
-Q0_MAIN = float(P2["Q0_main"])                              # 0.6609
-# 副口径：网页域 pile_cc 在同一锚点下的域质量（Q_B = q，不另做缩放）
-Q0_WEB = 0.676134904846549
+# 主口径：Q_B = q̄(p)，Q0 = q̄(p*)；与 P1 接口逐值核对。
+Q0_MAIN = float(P2["Q0_main"])
+if not np.isclose(Q0_MAIN, float(P1["Qbar_pstar_eqweight"]), atol=1e-10):
+    raise ValueError("P1 与 P2 的主质量基线不一致")
+# 同一质量映射下的网页域对照，不把它误称为另一种 Q_B 映射。
+with open(f"{ROOT}/outputs_q1/interface/P1_Q_domain.csv", encoding="utf-8-sig") as _f:
+    _web = [r for r in csv.DictReader(_f) if r["mixture_domain"] == "pile_cc"]
+if len(_web) != 1:
+    raise ValueError("P1 领域质量中必须恰有一个 pile_cc")
+Q0_WEB = float(_web[0]["Q_final"])
 
 # ---------------- 三种质量成本函数（附录 B）：(g, g') ----------------
 G_FUNCS = {
@@ -46,7 +56,12 @@ G_FUNCS = {
               lambda Q: 2e9 * 10.0 / (1 + 10.0 * Q)),
 }
 G_LIST = list(G_FUNCS)
-LCTX_C7 = [2048, 4096, 8192, 32768, 131072]      # C7 max_position_embeddings 的全部取值
+_c7_path = Path(ROOT).parent / "附件" / "C_efficiency_evolution" / "model_architecture_metadata.csv"
+with _c7_path.open(encoding="utf-8-sig") as _f:
+    LCTX_C7 = sorted({int(float(r["max_position_embeddings"])) for r in csv.DictReader(_f)
+                     if r.get("max_position_embeddings")})
+if LCTX_C7 != [2048, 4096, 8192, 32768, 131072]:
+    raise ValueError(f"C7 上下文档位与 Spec 不一致: {LCTX_C7}")
 
 
 def hN(Q, p=PAR):
@@ -128,18 +143,34 @@ def solve(C, g="对数型", Lctx=2048, Q0=Q0_MAIN, p=PAR, eta=ETA, nQ=41, levels
     return r
 
 
-def c_crit(g, Lctx, Q0, p=PAR, eta=ETA, which="leave", lo=15.0, hi=26.0, it=40):
+def c_crit(g, Lctx, Q0, p=PAR, eta=ETA, which="leave", lo=15.0, hi=26.0, it=40,
+           return_status=False):
     """二分法求临界预算 log10 C_crit（向量化：p 的各参数可为长度 n 的数组）
     which="leave": 离开 Q0 角点（开始提质）的最小预算；
-    which="full" : 进入 Q=1 角点（提满）的最小预算。"""
+    which="full" : 进入 Q=1 角点（提满）的最小预算。
+    无提质区间或搜索端点未括根时返回 NaN；可选返回逐项状态。"""
+    if which not in ("leave", "full"):
+        raise ValueError(f"未知临界点类型: {which}")
     n = max([np.size(v) for v in p.values()] + [np.size(Q0), 1])
+    q0 = np.broadcast_to(np.atleast_1d(np.asarray(Q0, float)), (n,))
+    if np.any((q0 <= 0) | (q0 > 1)):
+        raise ValueError("Q0 必须在 (0,1] 内")
+    quality_range = q0 < 1 - 1e-10
+
+    def reached(x):
+        r = solve(10.0 ** x, g, Lctx, q0, p, eta, nQ=21, levels=3)
+        return r["regime"] > 0 if which == "leave" else r["regime"] == 2
+
     a = np.full(n, lo); b = np.full(n, hi)
+    bracketed = quality_range & ~reached(a) & reached(b)
     for _ in range(it):
         m = (a + b) / 2
-        r = solve(10.0 ** m, g, Lctx, Q0, p, eta, nQ=21, levels=3)
-        hit = r["regime"] > 0 if which == "leave" else r["regime"] == 2
+        hit = reached(m)
         b = np.where(hit, m, b); a = np.where(hit, a, m)
-    return (a + b) / 2
+    values = np.where(bracketed, (a + b) / 2, np.nan)
+    status = np.where(~quality_range, "NO_QUALITY_RANGE",
+                      np.where(bracketed, "FOUND", "NOT_BRACKETED"))
+    return (values, status) if return_status else values
 
 
 def classify(Q, Q0, tol=1e-4):

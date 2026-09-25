@@ -8,9 +8,9 @@
   "kappa_D": 0.14049999999999996,
   "k0": 0.14072944202606927,
   "q_shape": "lin",
-  "form": "L = {E + A·N^-α·[1+κN(1−Q)] + B·D^-β·[1+κD(1−Q)] + k0·(1−Q)} · exp(s(N)·[f̄(p) − f̄(p*)])",
+  "form": "L_core = E + A·N^-α·[1+κN(1−Q)] + B·D^-β·[1+κD(1−Q)] + k0·(1−Q); p=p*",
   "family": "嵌套族 M0–M4(+floor)，形状 lin/pow/exp；主模型由 CV/F 检验选出，见 T21/T21b",
-  "p_channel": "total_log_additive",
+  "p_channel": "exploratory_total_log_additive",
   "s_p": {
     "s0": 1.003128843576256,
     "s1_per_decade": -0.07706522026754299,
@@ -42,5 +42,34 @@
     "k0": 0.19216752088905506,
     "k1": 175.28798069278614,
     "note": "旧主模型 = 新主模型在 κD=0 处的特例（κN=k1/A）"
-  }
+  },
+  "q_mapping": {
+    "main": {
+      "name": "identity",
+      "formula": "Q_B = Q_A",
+      "parameters": {},
+      "support": [
+        0.0,
+        1.0
+      ],
+      "clip_policy": "error",
+      "evidence_level": "题面语义锚点假设",
+      "source": "doc/Q2/问题二_SPEC.md"
+    },
+    "alt": {
+      "name": "pstar_anchor",
+      "formula": "Q_B = Q_A / Qbar_pstar",
+      "parameters": {
+        "Qbar_pstar": 0.6608889991022963
+      },
+      "support": [
+        0.0,
+        1.0
+      ],
+      "clip_policy": "error",
+      "evidence_level": "敏感性假设；部分领域超出 B 数据支持域",
+      "source": "doc/Q2/问题二_SPEC.md"
+    }
+  },
+  "p_channel_evidence": "s(N) 含 A6–A11 重拟合数据；不满足留出集仅评估要求，不是已验证的四变量主律"
 }

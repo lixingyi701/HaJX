@@ -5,7 +5,8 @@ q4_00_common.py — 问题四公共口径：路径、数据读取、四项口径
 【四项口径（赛题逐条点名，统一在此定义，后续脚本只引用不再改）】
 1. 能力度量：主口径 = C1 `Average ⬆️`（Open LLM Leaderboard v2 六维等权，已扣随机基线，0-100）；
             副口径 = C8 逐任务重算的"去饱和综合分"（q4_02 产出）。
-2. 开源口径：C1/C2 全部来自 HF Hub ⇒ 权重均可下载；再按 Hub License 分三档
+2. 开源口径：Hub 记录不等于权重可下载；需与 C2 开放权重标记及 C4 可访问性核对，
+            再按 Hub License 分三档
             permissive（apache/mit/bsd/cc-by/openrail…）、community（llama*/gemma/qwen/other…）、
             noncommercial（cc-by-nc*…）。C4 以 `Model accessibility` 含 "Open weights" 为开源。
 3. 模型类型：base = 🟢 pretrained + 🟩 continuously pretrained；
@@ -20,7 +21,7 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "code_q1"))
 from q1_00_common import ROOT, setup_cjk_matplotlib  # noqa: E402,F401
 
-C_DIR = f"{ROOT}/real_attachments/C_efficiency_evolution"
+C_DIR = os.path.join(os.path.dirname(ROOT), "附件", "C_efficiency_evolution")
 C8_DIR = f"{C_DIR}/detailed_results"
 OUT = f"{ROOT}/outputs_q4"
 TAB, FIG, IFACE, CACHE = f"{OUT}/tables", f"{OUT}/figures", f"{OUT}/interface", f"{OUT}/cache"
@@ -29,7 +30,7 @@ for _d in (TAB, FIG, IFACE, CACHE):
 
 P2 = json.load(open(f"{ROOT}/outputs_q2/interface/P2_scaling_law.json"))
 PAR = dict(E=P2["E"], A=P2["A"], al=P2["alpha"], B=P2["B"], be=P2["beta"],
-           k0=P2["k0"], k1=P2["k1"])
+           k0=P2["k0"], kappa_N=P2["kappa_N"], kappa_D=P2["kappa_D"])
 ETA = 2e-4
 DIMS = ["IFEval", "BBH", "MATH Lvl 5", "GPQA", "MUSR", "MMLU-PRO"]
 AVG = "Average ⬆️"
@@ -37,8 +38,9 @@ AVG = "Average ⬆️"
 
 def law_loss(N, D, Q=1.0, p=PAR):
     """问题二广义标度律（参数固定不重估）"""
-    return (p["E"] + (p["A"] + p["k1"] * (1 - Q)) * N ** -p["al"]
-            + p["B"] * D ** -p["be"] + (1 - Q) * p["k0"])
+    return (p["E"] + p["A"] * (1 + p["kappa_N"] * (1 - Q)) * N ** -p["al"]
+            + p["B"] * (1 + p["kappa_D"] * (1 - Q)) * D ** -p["be"]
+            + (1 - Q) * p["k0"])
 
 
 def type_group(t):

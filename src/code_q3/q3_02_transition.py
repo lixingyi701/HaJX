@@ -27,6 +27,11 @@ SLOPE0 = (PAR["al"] - PAR["be"]) / (PAR["al"] + PAR["be"])
 
 def bisect_phi(g, Lc, Q0, lo=15.0, hi=26.0, it=50):
     """口径 A 的解析识别：Φ(C; Q=Q0) = 1 的根（Φ 随 C 单调增）"""
+    if Q0 >= 1 - 1e-10:
+        return np.nan
+    if not (phi_ratio(10 ** lo, g, Lc, Q0, Q0) < 1
+            and phi_ratio(10 ** hi, g, Lc, Q0, Q0) >= 1):
+        return np.nan
     for _ in range(it):
         m = (lo + hi) / 2
         if phi_ratio(10 ** m, g, Lc, Q0, Q0) > 1: hi = m
@@ -54,12 +59,14 @@ if __name__ == "__main__":
     for q0name, Q0 in Q0S.items():
         for g in G_LIST:
             for Lc in LCTX_C7:
-                cA_leave = float(c_crit(g, Lc, Q0, which="leave")[0])
-                cA_full = float(c_crit(g, Lc, Q0, which="full")[0])
+                leave, leave_status = c_crit(g, Lc, Q0, which="leave", return_status=True)
+                full, full_status = c_crit(g, Lc, Q0, which="full", return_status=True)
+                cA_leave, cA_full = float(leave[0]), float(full[0])
                 cA_phi = bisect_phi(g, Lc, Q0)
                 cB, sQmax, cC, devC = local_criteria(S, g, Lc, q0name)
                 rows.append(dict(Q0口径=q0name, Q0=Q0, g=g, L_ctx=Lc,
                                  A_leave_Q0=cA_leave, A_reach_Q1=cA_full,
+                                 A_leave_status=str(leave_status[0]), A_full_status=str(full_status[0]),
                                  A_width_dex=cA_full - cA_leave, A_phi_analytic=cA_phi,
                                  B_sQ_peak=cB, sQ_peak=sQmax,
                                  C_DN_kink=cC, DN_slope_dev=devC))
@@ -111,9 +118,12 @@ if __name__ == "__main__":
     for q0name, Q0 in Q0S.items():
         for g in G_LIST:
             cc = c_crit(g, 2048, np.full(len(smp), Q0), p=pb, which="leave")
+            valid = cc[np.isfinite(cc)]
             bs.append(dict(Q0口径=q0name, g=g, point=float(c_crit(g, 2048, Q0)[0]),
-                           p05=np.percentile(cc, 5), p50=np.percentile(cc, 50),
-                           p95=np.percentile(cc, 95)))
+                           p05=np.percentile(valid, 5) if len(valid) else np.nan,
+                           p50=np.percentile(valid, 50) if len(valid) else np.nan,
+                           p95=np.percentile(valid, 95) if len(valid) else np.nan,
+                           n_found=len(valid), n_total=len(cc)))
             # 同时检查三档预算下 regime 是否稳定
             for lc in (19, 22, 24):
                 r = solve(np.full(len(smp), 10.0 ** lc), g, 2048, np.full(len(smp), Q0), p=pb)
@@ -163,20 +173,28 @@ if __name__ == "__main__":
 
     # ============ 接口 JSON ============
     main = T[T.L_ctx == 2048]
+    def finite_or_none(x):
+        return round(float(x), 3) if np.isfinite(x) else None
     J = dict(definition=dict(
         A="KKT 活跃约束集切换：Q*=Q0 角点 → 内点 → Q*=1 角点；解析判据 Φ(C)=1",
         B="提质份额弹性 d ln s_Q / d ln C 由正转负（s_Q 极大）",
         C="配置比斜率 d ln(D*/N*)/d ln C 偏离固定质量基准 (α-β)/(α+β)=%.4f 的极值点" % SLOPE0),
         L_ctx_crit=LCTX_CRIT,
-        C_crit_Lctx2048={f"{r.Q0口径}|{r.g}": dict(leave_Q0=round(r.A_leave_Q0, 3),
-                                                     reach_Q1=round(r.A_reach_Q1, 3),
-                                                     phi_analytic=round(r.A_phi_analytic, 3),
+        C_crit_Lctx2048={f"{r.Q0口径}|{r.g}": dict(leave_Q0=finite_or_none(r.A_leave_Q0),
+                                                     leave_status=r.A_leave_status,
+                                                     reach_Q1=finite_or_none(r.A_reach_Q1),
+                                                     full_status=r.A_full_status,
+                                                     phi_analytic=finite_or_none(r.A_phi_analytic),
                                                      sQ_peak=round(r.B_sQ_peak, 3),
                                                      DN_kink=round(r.C_DN_kink, 3))
                          for r in main.itertuples()},
         max_spread_three_criteria_dex=round(float(T.spread_ABC_dex.max()), 3),
-        bootstrap=BS[["Q0口径", "g", "point", "p05", "p95"]].round(3).to_dict("records"))
-    json.dump(J, open(f"{IFACE}/P3_structural_transition.json", "w"), ensure_ascii=False, indent=2)
+        bootstrap=[{k: (finite_or_none(v) if isinstance(v, (float, np.floating)) else v)
+                    for k, v in row.items()}
+                   for row in BS[["Q0口径", "g", "point", "p05", "p95", "n_found", "n_total"]]
+                   .to_dict("records")])
+    json.dump(J, open(f"{IFACE}/P3_structural_transition.json", "w"), ensure_ascii=False, indent=2,
+              allow_nan=False)
 
     # ================= 作图 =================
     plt = setup_cjk_matplotlib()

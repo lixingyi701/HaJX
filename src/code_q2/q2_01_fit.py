@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-q2_01_fit.py — 问题二·A：广义标度律的正式拟合（Chinchilla 加式骨架 + Q/p 乘性耦合的嵌套族）
+q2_01_fit.py — 问题二·A：广义标度律拟合（质量核心式；配比通道为探索性）
 =====================================================================================
 数据边界（题面：本问直接使用附件 B；附件 A 只通过问题一输出引入，不重复读取原始文件）：
     直接读取：B1 B2 B3 B4 B5 B6/B7 B8 B9 B10
     问题一接口：P1_f_p_coefficients（clr+Huber 系数）、P1_p_star、P1_Q_domain、P1_summary、
                 cache/step6_scale.npz（三尺度系数漂移 a_hat/rho_hat，问题一 Step6 产出）
 模型族（Q=1、p=p* 时精确退化为经典式）：
-    L(N,D,Q,p) = { E + A·N^-α·h_N(Q) + B·D^-β·h_D(Q) + k0·(1−Q) } · m(p)
+    L_core(N,D,Q) = E + A·N^-α·h_N(Q) + B·D^-β·h_D(Q) + k0·(1−Q)
     h_X(Q)：lin 1+κ(1−Q)（主）/ pow Q^-κ / exp e^{κ(1−Q)}；k0(1−Q) 为可选加性地板
-    m(p) = exp( s(N)·[ f̄(p) − f̄(p*) ] ),  f̄(p) = 13 验证域等权的 ln L̂_v(p)
+    探索性 m(p) = exp( s(N)·[ f̄(p) − f̄(p*) ] )，s(N) 使用 A6–A11 重拟合漂移，不能称已验证四变量主律
 嵌套关系：M0 经典 ⊂ {M1 κN=0, M2 κD=0, M3 κN=κD} ⊂ M4 ⊂ M4+floor（主）；旧 M-add = M4+floor|κD=0
 步骤：
     Step-1 基线：B1 网格 α,β + LS；核对 C_FLOPs 与 6ND 的比值
@@ -27,8 +27,9 @@ from q1_00_common import ROOT as _ROOT, setup_cjk_matplotlib, r2_score, rmse, sp
 
 ROOT = _ROOT if os.path.isdir(_ROOT) else os.path.abspath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-ATT = next(p for p in (f"{ROOT}/real_attachments", os.path.abspath(f"{ROOT}/../real_attachments"))
-           if os.path.isdir(p))
+ATT = os.path.join(os.path.dirname(ROOT), "附件")
+if not os.path.isdir(ATT):
+    raise FileNotFoundError(f"赛题附件目录不存在: {ATT}")
 B = f"{ATT}/B_scaling_laws"
 IF1 = f"{ROOT}/outputs_q1/interface"
 CACHE1 = f"{ROOT}/outputs_q1/cache"
@@ -451,9 +452,10 @@ if __name__ == "__main__":
     params = dict(
         E=E0, A=A0, alpha=al, B=B0, beta=be,
         kappa_N=kN, kappa_D=kD, k0=k0, q_shape="lin",
-        form="L = {E + A·N^-α·[1+κN(1−Q)] + B·D^-β·[1+κD(1−Q)] + k0·(1−Q)} · exp(s(N)·[f̄(p) − f̄(p*)])",
+        form="L_core = E + A·N^-α·[1+κN(1−Q)] + B·D^-β·[1+κD(1−Q)] + k0·(1−Q); p=p*",
         family="嵌套族 M0–M4(+floor)，形状 lin/pow/exp；主模型由 CV/F 检验选出，见 T21/T21b",
-        p_channel="total_log_additive",
+        p_channel="exploratory_total_log_additive",
+        p_channel_evidence="s(N) 含 A6–A11 重拟合数据；不满足留出集仅评估要求，不是已验证的四变量主律",
         s_p=dict(s0=float(s_lin[1]), s1_per_decade=float(s_lin[0]), rule="s(N)=max(s0 + s1·log10(N/1e6), 0)",
                  s_at=dict(zip(ptab.scale, ptab.s.round(4).tolist())),
                  source="问题一 Step6 三尺度重拟合系数漂移（cache/step6_scale.npz），未读附件 A"),
@@ -465,6 +467,14 @@ if __name__ == "__main__":
             alt=f"q*=q̄(p*)={q_alt_ref:.4f}, b=1/q* ⇒ Q_B = q̄(p)/{q_alt_ref:.4f}（当前推荐配比语料 ⇔ 经典式，敏感性口径）",
             note="κN、κD、k0 在 B 自身的 Q 网格上估计，与锚点无关"),
         Q0_main=Q0_main, Q0_alt=1.0,
+        q_mapping=dict(
+            main=dict(name="identity", formula="Q_B = Q_A", parameters={},
+                      support=[0.0, 1.0], clip_policy="error",
+                      evidence_level="题面语义锚点假设", source="doc/Q2/问题二_SPEC.md"),
+            alt=dict(name="pstar_anchor", formula="Q_B = Q_A / Qbar_pstar",
+                     parameters=dict(Qbar_pstar=Q0_main), support=[0.0, 1.0],
+                     clip_policy="error", evidence_level="敏感性假设；部分领域超出 B 数据支持域",
+                     source="doc/Q2/问题二_SPEC.md")),
         q_domain_range=[float(qd.Q_final.min()), float(qd.Q_final.max())],
         noise_sigma=float(tab_i.loc[MAIN, "in_rmse"]),
         legacy_additive_form=dict(form="L = L0 + (1-Q)(k0 + k1·N^-α)", k0=float(kadd[0]), k1=float(kadd[1]),
