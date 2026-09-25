@@ -1,2 +1,2 @@
-﻿n,mean_L_at_Qmin,mean_L_at_Q1,frac_below_E,corr_with_B7_same_points,verdict
-1704,0.5454426666666666,2.3068615942028985,0.6426056338028169,-0.02614443491975054,Loss 随 Q 上升且大量低于 E，与 B6/B7 语义相反，不用于拟合
+﻿n,mean_L_at_Qmin,mean_L_at_Q1,frac_below_E,verdict
+1704,0.5454426666666666,2.3068615942028985,0.6426056338028169,Loss 随 Q 上升且大量低于 E，与 B6/B7 方向相反，不用于拟合
