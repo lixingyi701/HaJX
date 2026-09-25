@@ -31,7 +31,7 @@
 
 \subsection{核心程序}
 
-\textbf{(1) CRITIC 权重与加权几何平均（\texttt{code\_q1/q1\_02\_quality.py} 节选）}
+\textbf{(1) CRITIC 权重与加权 Huber 主分（\texttt{code\_q1/q1\_02\_quality.py} 节选）}
 \begin{lstlisting}
 def fit_critic(self, Z):
     sd = Z.std(axis=0, ddof=1)                 # contrast intensity
@@ -40,9 +40,15 @@ def fit_critic(self, Z):
     self.critic_w = C / C.sum()
     return self.critic_w
 
-def score(self, Z, w=None):                    # weighted geometric mean
-    w = self.critic_w if w is None else w
-    return np.exp((w[None, :] * np.log(np.clip(Z, EPS, 1))).sum(axis=1))
+def fit_delta(self, Z):                       # A1 weighted-MAD rule
+    center = weighted_median(Z, self.critic_w)
+    dev = np.abs(Z - center[:, None])
+    mad = weighted_median(dev, self.critic_w)
+    self.delta = float(np.clip(1.345 * 1.4826 * np.median(mad), .01, 1.0))
+    return self.delta
+
+def score(self, Z):                           # fixed weights and delta
+    return weighted_huber_center(Z, self.critic_w, self.delta)
 \end{lstlisting}
 
 \textbf{(2) 问题三向量化求解器（\texttt{code\_q3/q3\_00\_model.py} 节选）}
