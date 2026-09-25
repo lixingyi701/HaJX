@@ -1,0 +1,138 @@
+\subsection{问题二的模型建立与求解}
+
+\subsubsection{模型建立}
+
+\textbf{建模思路。}经典标度律只有 $N$ 与 $D$。本文保持 Chinchilla 的加式骨架，把质量写成可约损失上的乘性耦合，并把配比写成总损失上的对数可加项。$Q=1$ 且 $\bp=\bp^*$ 时，新公式退化为经典形式。质量项的具体形状不先验指定，而在同一基线上用嵌套族让数据裁决。
+
+\textbf{数据审计。}B1 与 Hoffmann 等（2022）的常数吻合到 $\mathrm{RMSE}=1.6\times10^{-4}$，是公式生成的无噪声锚点，不能当作“Pile 语料 $\Leftrightarrow Q_{\mathrm B}=1$”的实证。在 B6/B7 的 $N\times D\times Q$ 网格上，去掉基线后的质量效应与 $(1-Q)$ 呈线性关系（图~\ref{fig:q2rev}），分档 $\Delta(Q)$ 对 $(1-Q)$ 的 $R^2=0.997$。B8 与 B6/B7 在相同格点上的相关为 $-0.03$，且损失随 $Q$ 上升，因此不参与联合拟合。B6/B7 为半合成数据，下文的 $\kappa_N,\kappa_D,k_0$ 不得表述为真实训练的观测。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.95\textwidth]{q12_F8_reverse_engineering.png}
+\caption{附件 B 的逆向分析：B1 锚点（左）、B6/B7 残差对 $(1-Q)$ 的线性结构（中）、B8 与 B6/B7 的不一致（右）}
+\label{fig:q2rev}
+\end{figure}
+
+\textbf{主模型。}交叉验证选出的广义标度律为
+\begin{equation}
+\boxed{\;L=\bigl\{E+A N^{-\alpha}h_N(Q)+B D^{-\beta}h_D(Q)+k_0(1-Q)\bigr\}\,e^{s(N)[\bar f(\bp)-\bar f(\bp^*)]}\;}
+\label{eq:main}
+\end{equation}
+其中 $h_N(Q)=1+\kappa_N(1-Q)$，$h_D(Q)=1+\kappa_D(1-Q)$，
+\[
+s(N)=\max\{1.003-0.077\log_{10}(N/10^6),\,0\}.
+\]
+$Q=1$ 且 $\bp=\bp^*$ 时，式~\eqref{eq:main} 退化为经典 Chinchilla 形式\cite{hoffmann}。$\kappa_N>\kappa_D$ 表示质量不足主要抬高参数项。$k_0(1-Q)$ 是不随规模衰减的质量地板。旧加性形式 $(1-Q)(k_0+k_1 N^{-\alpha})$ 是 $\kappa_D=0$ 处的特例（嵌套检验 $F=25.6$，$p=6\times10^{-7}$）。去掉地板的检验为 $F=109$，但该地板是 B6/B7 的生成特征：$N,D\to\infty$ 时 $L\to E+k_0(1-Q)$，外推到真实训练时须标注。
+
+\textbf{配比渠道与质量口径。}按赛题要求，问题二不重复读取附件 A。$s(N)$ 由问题一 Step6 的三尺度系数漂移标定：把各验证域系数投影到 1M 的方向上，得 $s(1\mathrm{M})=1.00$、$s(60\mathrm{M})=0.87$、$s(1\mathrm{B})=0.77$，方向余弦不低于 $0.94$。1B 以上是外推。质量口径取仿射形式 $Q_{\mathrm B}=1-b(q^*-\bar q(\bp))$。$q^*$ 与 $b$ 不能由损失数据识别。主口径取题面建议的“完美教材 $\Leftrightarrow$ 经典式”：
+\begin{equation}
+Q_{\mathrm B}(\bp)=\bar q(\bp)=\sum_{i=1}^{17}p_i\,\hat Q_{d(i)},\qquad Q_0=\bar q(\bp^*)=0.6609,
+\label{eq:qmix}
+\end{equation}
+副口径取“当前推荐配比语料 $\Leftrightarrow$ 经典式”，$Q_{\mathrm B}=\bar q(\bp)/0.6609$，此时 $Q_0=1$。$\kappa_N,\kappa_D,k_0$ 在附件 B 自身的 $Q$ 网格上估计，与锚点无关。早期 Pile 锚点 $Q_{\mathrm{ref}}=0.5608$ 已废弃。17 个域质量的凸包为 $[0.509,0.771]$，凸包外的延拓是额外假设。配比的域结构由迁移矩阵 $T$ 单独描述。问题一的交互系数在显著域中多数反号，因此不把质量与配比合并成单一乘子。问题三的主口径即式~\eqref{eq:qmix} 的 $Q_0=0.6609$，网页副口径取 pile\_cc 的域质量 $0.676$。
+
+\subsubsection{求解方法}
+
+\textbf{两步拟合。}第一步在 B1 上确定基线 $L_0=1.6901+406.4N^{-0.340}+410.6D^{-0.280}$。第二步固定基线，在 B7（含 B6 全部 360 点）的 450 个点上比较嵌套族：经典式、只耦合数据项、只耦合参数项、整体乘子、两项自由耦合，以及加上地板项。质量乘子同时比较线性 $1+\kappa(1-Q)$、幂 $Q^{-\kappa}$ 和指数 $e^{\kappa(1-Q)}$。裁决用五折交叉验证、留一规模交叉验证、12B 外推和嵌套 $F$ 检验（表~\ref{tab:forms}）。参数区间用残差 bootstrap（$B=300$）估计。
+
+\begin{table}[H]
+\centering\small
+\caption{质量项形式选择（五折 cv-RMSE；数据噪声水平 $\sigma\approx0.05$）}
+\label{tab:forms}
+\begin{tabular}{llc}
+\toprule
+候选形式 & 所属族 & cv-RMSE \\
+\midrule
+\textbf{耦合 + 地板（主）}\ $h_N,h_D,k_0$ & 线性乘性耦合 & $\mathbf{0.0497}$ \\
+旧加性\ $(1-Q)(k_0+k_1N^{-\alpha})$ & $\kappa_D=0$ 特例 & $0.0512$ \\
+幂形状\ $Q^{-\kappa}$ & 乘性耦合 & $0.0817$ \\
+有效数据\ $\kappa_N=0$ & 文献口径 & $0.0979$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+主模型的 cv-RMSE 达到噪声水平。二次项检验 $t=-0.35$，幂形状被否决。只作用于数据项的文献口径在单参数模型中最差。bootstrap 中 $P(\kappa_N>\kappa_D)=P(\kappa_D>0)=P(k_0>0)=1$。
+
+\begin{table}[H]
+\centering\small
+\caption{广义标度律参数估计（括号内为残差 bootstrap 95\% CI）}
+\label{tab:params}
+\begin{tabular}{cccccccc}
+\toprule
+$E$ & $A$ & $\alpha$ & $B$ & $\beta$ & $\kappa_N$ & $\kappa_D$ & $k_0$ \\
+\midrule
+$1.6901$ & $406.39$ & $0.34$ & $410.59$ & $0.28$ &
+\makecell{$0.431$\\ {\footnotesize$[0.390,0.473]$}} &
+\makecell{$0.140$\\ {\footnotesize$[0.085,0.195]$}} &
+\makecell{$0.141$\\ {\footnotesize$[0.114,0.168]$}} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{结果与分析}
+
+\textbf{跨源检验。}在 $Q=1$ 的切片上，主模型与观测的 Spearman 相关为：scaling\_baseline（57 点）$0.983$，published（44 点）$0.959$，平均偏差分别为 $0.22$ 与 $0.02$ nats。趋势一致，水平偏移来自 tokenizer 与验证集差异，不用于标定参数。B2 的 Spearman 为 $0.788$、偏差为 $1.18$ nats，仅作定性佐证。B9/B10 的百亿以上对照中，B10 本身就是 $Q=1$ 的公式值；$Q_0=0.661$ 相对 $Q=1$ 的损失缺口中位数为 $0.063$，约占可约损失的 $30\%$，且 B10 为估算值。
+
+\textbf{解析命题。}以下四条命题在 $\bp=\bp^*$ 时由式~\eqref{eq:main} 直接推出。等效替代的解析解与数值解相对误差为 $0$；$N^*$ 的相对误差小于 $10^{-6}$。$\bp\neq\bp^*$ 时，$s(N)$ 使配比与规模耦合，闭式不再成立：在 1B、$\Delta\bar f$ 的 P90 处，修正项约为该点 $\varepsilon_N$ 的 $7\%$，在 $7\times10^{10}$ 处约为 $26\%$。
+
+\begin{proposition}[弹性]\label{prop:el}
+记 $\Phi(Q)=\kappa_N A N^{-\alpha}+\kappa_D B D^{-\beta}+k_0$。损失对三个因素的弹性为
+$\displaystyle
+\varepsilon_N=-\frac{\alpha A N^{-\alpha}h_N(Q)}{L},\quad
+\varepsilon_D=-\frac{\beta B D^{-\beta}h_D(Q)}{L},\quad
+\varepsilon_Q=-\frac{Q\,\Phi(Q)}{L}.$
+在 $(N,D,Q)=(10^{10},10^{12},0.9)$ 处三者依次为 $-0.028$、$-0.025$、$-0.103$，即\emph{质量弹性约为参数弹性的 $3.7$ 倍}。$Q=0.6$ 时的有效规模为 $0.626N$ 与 $0.823D$。由于 $k_0$ 不随 $N$ 衰减，规模越大，质量的相对优势越明显。
+\end{proposition}
+
+\begin{proposition}[质量—参数等效替代及其边界]\label{prop:sub}
+固定 $D$，使 $L(N',D,Q)=L(N,D,Q+\delta)$ 成立的等效倍数为
+\begin{equation}
+\frac{N'}{N}=t^{-1/\alpha},\qquad
+t=\frac{h_N(Q+\delta)}{h_N(Q)}-\frac{\delta\,(\kappa_D B D^{-\beta}+k_0)}{A N^{-\alpha}h_N(Q)}.
+\end{equation}
+可替代当且仅当 $t>0$，即 $N<N_{\max}$。$D=3\times10^{11}$、$\delta=0.1$ 时，$N_{\max}$ 约为 $(0.7\text{--}1.1)\times10^{13}$。在算力最优点上，主口径 $Q_{\mathrm B}$ 从 $0.5$ 提到 $0.6$，等效于参数扩大 $1.29$ 倍（$C=10^{20}$）、$1.42$ 倍（$C=10^{22}$）、$1.77$ 倍（$C=10^{24}$）。副口径下同样的 $\Delta\bar q=0.1$ 折合 $\Delta Q_{\mathrm B}=0.151$，对应 $1.47$、$1.73$、$2.48$ 倍。固定 $D=3\times10^{11}$、$\delta=0.1$ 时，$N=10^9$ 处 $Q$ 从 $0.9$ 提到 $1.0$ 等效 $1.32$ 倍，$N=10^{10}$ 处为 $1.59$ 倍。同一份质量改进，模型越大价值越高；超过 $N_{\max}$ 后，任何有限的扩参都无法替代这次质量提升。
+\end{proposition}
+
+\begin{proposition}[质量地板]\label{prop:fl}
+$\lim_{N,D\to\infty}L=E+(1-Q)k_0$。$Q=0.5$ 的地板比 $Q=1$ 高 $0.070$ nats。这是半合成数据的生成特征，为问题三的付费提质提供机制，但不宜当成真实语料的观测下界。
+\end{proposition}
+
+\begin{proposition}[算力最优配置随质量移动]\label{prop:opt}
+在约束 $6ND=C$ 且 $\bp=\bp^*$ 下，
+\begin{equation}
+N^{*}(C,Q)=\Bigl[\frac{\alpha A\,h_N(Q)}{\beta B\,h_D(Q)}\Bigr]^{\frac{1}{\alpha+\beta}}
+\Bigl(\frac{C}{6}\Bigr)^{\frac{\beta}{\alpha+\beta}},\qquad \frac{\beta}{\alpha+\beta}=0.452.
+\label{eq:nstar}
+\end{equation}
+因为 $\kappa_N>\kappa_D$，质量越低，最优模型越大：$Q_{\mathrm B}=0.3$ 时的 $N^*$ 是 $Q_{\mathrm B}=1$ 时的 $1.32$ 倍。$C=10^{22}$ 时，最优 token/参数比由 $Q=0.3$ 时的 $36$ 升至 $Q=1$ 时的 $63$。这一命题是问题三结构性转移的机制来源。
+\end{proposition}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{q12_F21_theory.png}
+\caption{解析理论三联图：等损失线（左）、等效参数倍数（中）、$N^*(C,Q)$（右）}
+\label{fig:theory}
+\end{figure}
+
+\textbf{单位算力的比较。}在训练算力的最优点上，比较每 FLOP 用于提质与用于扩参数的边际损失下降，$R_{QN}=\mathrm{MU}_Q/\mathrm{MU}_N$。$Q_0=0.661$ 时，$C=10^{19}$ 的比值为 $1.16/0.63/1.39$（指数型/幂函数型/对数型），$C=10^{22}$ 为 $40/22/49$，$C=10^{24}$ 为 $502/275/604$。低预算下“提质还是扩参数”取决于成本函数；$C\ge10^{21}$ 后三种成本函数都是提质更划算。去掉地板后比值约减半，方向不变。地板在 $\Phi$ 中的份额随规模从 $29\%$ 升到 $70\%$，所以大预算下的这一比较依赖 B6/B7 的地板项。
+
+\textbf{领域间的替代与互补。}配比通道有两部分。第一部分是 $Q_{\mathrm B}(\bp)$：换入质量较高的域，会同时降低 $h_N$、$h_D$ 和地板项。第二部分是迁移矩阵 $T$（表~\ref{tab:q2tm}）：13 个自域效应全部为负，各域补自己最有效；非对角负值是互补，最强的是 stackexchange 对 github（$-0.32$）与 github 对 stackexchange（$-0.21$）；正值是挤占，dm\_mathematics 一列除 ubuntu\_irc 外均为正。问题三的联立优化表明，联合降损几乎全部来自配比结构 $m(\bp)$，而不是 $Q_{\mathrm B}(\bp)$ 这一条通道。
+
+\begin{table}[H]
+\centering\small
+\caption{迁移矩阵 $T_{iv}$ 中的代表性互补与替代关系（节选）}
+\label{tab:q2tm}
+\begin{tabular}{llcl}
+\toprule
+增配域 $i$ & 验证域 $v$ & $T_{iv}$ & 关系 \\
+\midrule
+stackexchange & github & $-0.32$ & 互补（问答 $\to$ 代码） \\
+github & stackexchange & $-0.21$ & 互补（代码 $\to$ 问答） \\
+pubmed\_central & pubmed\_abstracts & $-0.16$ & 互补（全文 $\to$ 摘要） \\
+stackexchange & arxiv & $-0.15$ & 互补 \\
+pile\_cc & wikipedia\_en & $-0.11$ & 互补（网页 $\to$ 百科） \\
+enron\_emails & dm\_mathematics & $+0.50$ & 替代（挤占） \\
+pile\_cc & dm\_mathematics & $+0.26$ & 替代（挤占） \\
+\bottomrule
+\end{tabular}
+\end{table}

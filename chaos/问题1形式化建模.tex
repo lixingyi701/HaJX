@@ -1,0 +1,242 @@
+% ============================================================
+% 问题一：数据质量评价、指标冲突与训练配比 —— 形式化建模
+% 用法：本文件是可插入主报告的 \section 片段。
+% 主文件需要：\usepackage{amsmath, amssymb, amsthm, bm, booktabs}
+% 并在导言区定义（若尚未定义）：
+%   \newtheorem{definition}{定义}[section]
+%   \newtheorem{assumption}{假设}[section]
+%   \newtheorem{remark}{注}[section]
+% 编译：XeLaTeX + ctex（ctexart 或 ctexrep 文档类）
+% ============================================================
+
+\section{问题一的形式化建模}\label{sec:p1-model}
+
+问题一的任务链为：\textbf{质量信号标量化 $\to$ 综合质量评分 $\to$ 指标冲突度量与消解 $\to$ 配比--损失回归 $\to$ 跨尺度验证 $\to$ 质量与训练价值的桥接检验}。本节依次给出各环节的数学定义。全节的建模立场是：文本的\emph{内在质量} $Q$ 与其\emph{训练价值} $\nu$ 是两个不同的量，前者由质量信号构造（\S\ref{sec:p1-quality}--\S\ref{sec:p1-conflict}），后者由配比实验回归度量（\S\ref{sec:p1-regmix}），二者的关系是待检验的科学假设而非先验前提（\S\ref{sec:p1-bridge}）。
+
+\subsection{记号与数据对象}\label{sec:p1-notation}
+
+\begin{table}[htbp]
+  \centering
+  \caption{问题一主要记号}
+  \label{tab:p1-notation}
+  \begin{tabular}{llp{7.8cm}}
+    \toprule
+    记号 & 取值范围 & 含义 \\
+    \midrule
+    $\mathcal{S}_1,\mathcal{S}_2,\mathcal{S}_3$ & --- & 附件 A1 抽样集（$|\mathcal{S}_1|=51{,}230$，含原文）、A2/A3 扩展集（无原文） \\
+    $\mathcal{D}_{\mathrm{q}}$ & $|\mathcal{D}_{\mathrm{q}}|=7$ & 质量信号域集合（arxiv, book, c4, commoncrawl, github, stackexchange, wikipedia） \\
+    $\mathcal{D}_{\mathrm{m}}$ & $|\mathcal{D}_{\mathrm{m}}|=17$ & 训练配比域集合（Pile 十七域） \\
+    $\mathcal{D}_{\mathrm{v}}$ & $|\mathcal{D}_{\mathrm{v}}|=13$ & 验证损失域集合 \\
+    $\bm{u}_i$ & 混合类型 & 文档 $x_i$ 的 22 维原始质量信号（含 8 个 logits 列表字段与 15 个规则统计量中的标量字段） \\
+    $\bm{z}_i$ & $[0,1]^{J}$ & 定向标量化并稳健归一后的质量特征向量 \\
+    $q_i^{(g)},\,Q_i$ & $[0,1]$ & 文档 $x_i$ 的第 $g$ 组分数与综合质量分 \\
+    $Q_d$ & $[0,1]$ & 域 $d$ 的域级质量分（分文档口径与 token 口径） \\
+    $c_i$ & $[0,1]$ & 文档 $x_i$ 的指标冲突度 \\
+    $\bm{p}$ & $\Delta^{16}$ & 训练配比向量，$\Delta^{16}=\{\bm{p}\in\mathbb{R}^{17}_{\ge 0}:\ \bm{1}^\top\bm{p}=1\}$ \\
+    $\bm{\ell}(\bm{p})$ & $\mathbb{R}^{13}_{>0}$ & 配比 $\bm{p}$ 训练后 13 个验证域的交叉熵损失 \\
+    $L_{\mathrm{tgt}}(\bm{p})$ & $\mathbb{R}_{>0}$ & 由评价权重 $\bm{w}$ 聚合的目标损失 \\
+    $\nu_k$ & $\mathbb{R}$ & 配比域 $k$ 的训练边际价值（中心化回归系数的相反数） \\
+    $\Phi$ & 文本 $\to\mathbb{R}^{15}$ & 规则质量统计量（\texttt{rps\_*}）的确定性计算算子 \\
+    $\hat g$ & $\mathbb{R}^{15}\to[0,1]$ & 由 A1 学得的“规则特征 $\to$ 综合质量分”校准函数 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+数据对象与附件的对应：A4/A5 为 $M=512$ 组小代理实验 $\{(\bm{p}^{(m)},\bm{\ell}^{(m)})\}_{m=1}^{M}$（1M 参数模型，按 \texttt{index} 对齐）；A6--A9 为同构的留出集（1M 与 60M 各 256 组）；A10/A11 为 1B 规模验证（按 \texttt{index} 取交集后 63 组）；A12--A15 为 10B/70B 外推估算表，仅作一致性讨论。A16 给出 $\mathcal{D}_{\mathrm{m}}\to\mathcal{D}_{\mathrm{q}}$ 的部分映射 $\varphi$：6 个域为 direct/near\_direct，11 个域无映射（inferred）。A17/A18 提供 $\mathcal{D}_{\mathrm{m}}$ 全部 17 域的原始文本抽样及其规模摘要。
+
+\subsection{模块一：质量信号的定向标量化与综合评分}\label{sec:p1-quality}
+
+\begin{definition}[定向标量化算子]\label{def:scalarize}
+对文档 $x_i$ 的第 $j$ 个原始信号 $u_{ij}$，按其输出形态定义标量化值 $\tilde z_{ij}$：
+
+（i）二元 logits 型（$u_{ij}\in\mathbb{R}^2$，如 \texttt{fluency\_en}, \texttt{ad\_en}）：
+\begin{equation}
+  \tilde z_{ij}=\operatorname{softmax}(u_{ij})_{1}
+  =\frac{e^{u_{ij,1}}}{e^{u_{ij,0}}+e^{u_{ij,1}}}\in(0,1);
+  \label{eq:binary-logit}
+\end{equation}
+
+（ii）$K$ 档有序 logits 型（$u_{ij}\in\mathbb{R}^K$，如 \texttt{modernbert\_*} 的 $K=6$）：取期望档位并归一，
+\begin{equation}
+  \tilde z_{ij}=\frac{1}{K-1}\sum_{k=0}^{K-1} k\,\operatorname{softmax}(u_{ij})_{k}\in[0,1];
+  \label{eq:ordinal-logit}
+\end{equation}
+
+（iii）单值模型分（\texttt{fineweb\_edu}, \texttt{dsir\_*}）：直接取标量，进入式~\eqref{eq:normalize} 归一；
+
+（iv）适宜区间型规则统计量（如平均词长、词数、数字字符占比）：给定由 A1 分布确定的适宜区间 $[a_j,b_j]$ 与容忍尺度 $\gamma_j$，
+\begin{equation}
+  \tilde z_{ij}=\max\!\Bigl(0,\ 1-\frac{\operatorname{dist}\bigl(u_{ij},[a_j,b_j]\bigr)}{\gamma_j}\Bigr),
+  \qquad
+  \operatorname{dist}(x,[a,b])=\max(a-x,\,x-b,\,0);
+  \label{eq:interval}
+\end{equation}
+
+（v）方向型统计量（重复 $n$-gram 占比、无字母词占比等负向指标，以及 \texttt{ad\_en}）：令方向系数 $\sigma_j\in\{+1,-1\}$，负向指标取 $\sigma_j=-1$ 并以 $1-\tilde z_{ij}$ 代入后续计算。
+\end{definition}
+
+\begin{definition}[稳健归一化]\label{def:normalize}
+为消除量纲与重尾影响，对每个标量化信号施加缩尾--经验分布变换：
+\begin{equation}
+  z_{ij}
+  =\widehat F_{j}\Bigl(\operatorname{clip}\bigl(\tilde z_{ij};\,
+  \widehat F_{j}^{-1}(0.005),\,\widehat F_{j}^{-1}(0.995)\bigr)\Bigr)\in[0,1],
+  \label{eq:normalize}
+\end{equation}
+其中 $\widehat F_j$ 为该信号在 A1 上的经验分布函数。\textbf{同一组 $\{\widehat F_j,[a_j,b_j],\gamma_j,\sigma_j\}$ 在 A1 上估计后冻结，原样应用于 A2/A3 与 A17}，以保证跨数据集可比。
+\end{definition}
+
+\begin{definition}[分组评分与综合质量分]\label{def:composite}
+将归一化特征按语义划分为 $G=4$ 组：$J_{1}$ 教育/专业价值（\texttt{fineweb\_edu}、\texttt{qurater} 教育维、\texttt{modernbert\_professionalism/reasoning}、\texttt{dsir\_*}），$J_{2}$ 清洁度（\texttt{ad\_en} 反向、\texttt{modernbert\_cleanliness}、重复类 \texttt{rps} 指标反向），$J_{3}$ 可读性（\texttt{fluency\_en}、\texttt{modernbert\_readability}、格式类 \texttt{rps} 指标），$J_{4}$ 信息密度（一元熵、唯一词占比等）。组内与组间两级加权：
+\begin{equation}
+  q_i^{(g)}=\sum_{j\in J_g}\omega_j z_{ij},\quad
+  \sum_{j\in J_g}\omega_j=1;\qquad
+  Q_i=\sum_{g=1}^{G}\lambda_g\, q_i^{(g)},\quad
+  \bm{\lambda}\in\Delta^{G-1}.
+  \label{eq:composite}
+\end{equation}
+组内权重 $\omega$ 取等权为主方案（组内指标语义相近）；组间权重 $\bm{\lambda}$ 设三个候选：(a) 等权 $\lambda_g=1/G$；(b) A1 上组分数相关矩阵的第一主成分载荷（归一化到单纯形）；(c) 数据驱动方案，见式~\eqref{eq:lambda-driven}。主结果用 (a)，(b)(c) 进入敏感性分析。
+\end{definition}
+
+\begin{definition}[域级质量分的双口径]\label{def:domain-q}
+以 $n_i$ 记文档 $x_i$ 的词数（\texttt{rps\_doc\_word\_count}），域 $d$ 的质量分定义为
+\begin{equation}
+  Q_d^{\mathrm{doc}}=\frac{1}{|\mathcal{S}_d|}\sum_{i\in\mathcal{S}_d}Q_i,
+  \qquad
+  Q_d^{\mathrm{tok}}=\frac{\sum_{i\in\mathcal{S}_d} n_i\,Q_i}{\sum_{i\in\mathcal{S}_d} n_i}.
+  \label{eq:domain-q}
+\end{equation}
+$Q_d^{\mathrm{doc}}$ 回答“平均一篇文档”的质量，$Q_d^{\mathrm{tok}}$ 回答“平均一个训练 token”的质量。后续问题二、三中作为标度律与成本函数自变量的 $Q$ 统一采用 token 口径；置信区间由文档层自助法（bootstrap，$B=2000$）给出，样本量小的域（如 book, $n=171$）须报告区间而非点估计。
+\end{definition}
+
+\subsection{模块二：指标冲突的度量、类型划分与消解}\label{sec:p1-conflict}
+
+\begin{definition}[冲突度与冲突集]\label{def:conflict}
+文档 $x_i$ 的冲突度定义为组分数的极差
+\begin{equation}
+  c_i=\max_{g} q_i^{(g)}-\min_{g} q_i^{(g)}\in[0,1],
+  \label{eq:conflict}
+\end{equation}
+冲突集为 $\mathcal{C}=\{\,i:\ c_i\ge \tau\,\}$，阈值取 A1 上冲突度分布的高分位 $\tau=\widehat F_c^{-1}(0.95)$。冲突类型由达到极差的组对 $\bigl(\arg\max_g q_i^{(g)},\,\arg\min_g q_i^{(g)}\bigr)$ 划分，典型类型包括：专业性型（专业价值高、可读性低，多见于代码与公式文本）、广告混合型（教育价值高、清洁度低）、格式型（信息密度高、格式统计差）。
+\end{definition}
+
+\begin{remark}
+高冲突度是\emph{需要调查的信号}而非低质量的判定。A1 含原文 \texttt{content}，冲突集的类型划分须经人工抽查校验（每类抽 $\ge 30$ 篇）；A2/A3 无原文，只能应用已校验的规则并比较冲突比例与类型构成是否与 A1 对应域一致。
+\end{remark}
+
+\begin{definition}[条件化消解算子]\label{def:resolve}
+消解规则表述为组间权重对域与冲突类型的条件化：
+\begin{equation}
+  \widetilde Q_i=\sum_{g=1}^{G}\lambda_g\bigl(d_i,\,t_i\bigr)\,q_i^{(g)},
+  \label{eq:resolve}
+\end{equation}
+其中 $d_i$ 为文档域、$t_i\in\{$无冲突, 专业性型, 广告混合型, 格式型$\}$ 为冲突类型。例如对 $d_i\in\{\text{github},\text{arxiv}\}$ 且 $t_i=$ 专业性型的文档，将可读性组权重下调、专业组权重上调（具体数值由人工校验样本上的一致性标定）。消解规则的\textbf{外部准绳}是：采纳使域级质量分与配比实验度量的训练价值（\S\ref{sec:p1-bridge}）秩一致性更高、且不误伤专业语料（人工抽查通过率 $\ge 90\%$）的规则集。
+\end{definition}
+
+\subsection{模块三：配比--损失回归与最优配比（RegMix 范式）}\label{sec:p1-regmix}
+
+\begin{assumption}[小代理可迁移性]\label{asm:transfer}
+配比对各验证域损失的\emph{排序效应}在 1M--1B 参数范围内近似保持，即存在跨尺度单调映射使 1M 实验拟合的回归可预测更大尺度下不同配比的相对优劣。该假设由 A8--A11 实证检验（式~\eqref{eq:rank-transfer}），不作先验接受。
+\end{assumption}
+
+\begin{definition}[逐域回归与目标损失]\label{def:mix-reg}
+对每个验证域 $j\in\mathcal{D}_{\mathrm{v}}$，以 A4/A5 的 512 组观测拟合
+\begin{equation}
+  \widehat L_j(\bm{p})=f_j(\bm{p};\bm{\theta}_j),\qquad
+  \bm{\theta}_j=\arg\min_{\bm{\theta}}
+  \sum_{m=1}^{M}\bigl(\ell_j^{(m)}-f_j(\bm{p}^{(m)};\bm{\theta})\bigr)^2 .
+  \label{eq:mix-reg}
+\end{equation}
+基线取单纯形线性模型 $f_j(\bm{p})=\bm{\beta}_j^\top\bm{p}$（不含自由截距），对照模型取梯度提升树 $f_j^{\mathrm{GB}}$ 以捕捉域间交互；模型选择依据 A6/A7 留出集的预测性能。目标损失由\emph{事先固定}的评价权重 $\bm{w}\in\Delta^{12}$ 聚合：
+\begin{equation}
+  L_{\mathrm{tgt}}(\bm{p})=\sum_{j\in\mathcal{D}_{\mathrm{v}}} w_j\,\widehat L_j(\bm{p}).
+  \label{eq:target-loss}
+\end{equation}
+$\bm{w}$ 与 $\bm{p}$ 严格分离：$\bm{w}$ 定义“考卷”，$\bm{p}$ 是被优化的“备考策略”，二者同时变动将失去可比性。主方案取 $w_j$ 为 Pile 验证集的 token 份额，等权方案进入敏感性分析。
+\end{definition}
+
+\begin{remark}[可识别性]\label{rem:identify}
+由约束 $\bm{1}^\top\bm{p}=1$，系数 $\bm{\beta}_j$ 仅在差分意义下可识别：可解释的量是\emph{份额转移效应}
+\begin{equation}
+  \Delta_{k\to k'}^{(j)}
+  =\frac{\partial \widehat L_j}{\partial p_{k'}}-\frac{\partial \widehat L_j}{\partial p_{k}}
+  =\beta_{jk'}-\beta_{jk},
+  \label{eq:transfer-effect}
+\end{equation}
+即“把 1 单位份额从域 $k$ 移到域 $k'$”对损失 $j$ 的边际影响。报告一律采用此形式，不报告绝对系数。
+\end{remark}
+
+\begin{definition}[最优配比问题]\label{def:opt-mix}
+\begin{equation}
+  \bm{p}^{\star}=\arg\min_{\bm{p}\in\Delta^{16}} L_{\mathrm{tgt}}(\bm{p}),
+  \label{eq:opt-mix}
+\end{equation}
+线性基线下该问题为线性规划（顶点解需正则化或加入配比上界约束以避免退化到单域）；非线性模型下采用 Dirichlet 大样本模拟（$10^5$ 组候选配比取预测最优的前 $k$ 组平均）与 SLSQP 多起点数值优化交叉校验。输出 $\bm{p}^\star$、其相对 Pile 人工配比与均匀配比的预测收益，及由残差自助法得到的收益置信区间。
+\end{definition}
+
+\begin{definition}[跨尺度验证指标]\label{def:cross-scale}
+对尺度 $s\in\{\text{1M留出},\,\text{60M},\,\text{1B}\}$ 的观测集 $\{(\bm{p}^{(m)},\bm{\ell}^{(m,s)})\}$，报告：
+\begin{equation}
+  \mathrm{MAE}_j^{(s)}=\frac{1}{M_s}\sum_m\bigl|\ell_j^{(m,s)}-\widehat L_j(\bm{p}^{(m)})\bigr|,
+  \qquad
+  \rho^{(s)}=\operatorname{Spearman}\Bigl(L_{\mathrm{tgt}}(\bm{p}^{(m)}),\ \textstyle\sum_j w_j\ell_j^{(m,s)}\Bigr),
+  \label{eq:rank-transfer}
+\end{equation}
+以及 top-$k$ 遗憾 $R_k^{(s)}=\min_{m\in\widehat{\mathcal{T}}_k}\sum_j w_j\ell_j^{(m,s)}-\min_{m}\sum_j w_j\ell_j^{(m,s)}$，其中 $\widehat{\mathcal{T}}_k$ 为回归预测的前 $k$ 优配比。绝对误差 $\mathrm{MAE}$ 预期随尺度增大而增大（损失水平整体下移），而假设~\ref{asm:transfer} 只要求 $\rho^{(s)}$ 与 $R_k^{(s)}$ 保持良好；1B 验证使用 \texttt{index} 交集后的 63 组数据。A12--A15（10B/70B）为外推估算，仅报告与我们外推的一致性，证据层级标注为“模型外推”。
+\end{definition}
+
+\subsection{模块四：质量--配比桥接与“质量 $\ne$ 训练价值”检验}\label{sec:p1-bridge}
+
+A16 映射 $\varphi$ 仅覆盖 6 个配比域，其余 11 域无对应质量信号。桥接方案利用 \texttt{rps\_*} 规则统计量的\emph{可精确复算性}补全缺口。
+
+\begin{definition}[规则特征复算与校准函数]\label{def:calibration}
+设 $\Phi:\text{文本}\to\mathbb{R}^{15}$ 为 15 个规则统计量的确定性计算算子（定义公开，可逐条复现）。第一步，在 A1 上（每篇文档同时具备 $\Phi(x_i)$ 与综合分 $Q_i$）学习文档级校准函数
+\begin{equation}
+  \hat g=\arg\min_{g\in\mathcal{G}}
+  \sum_{i\in\mathcal{S}_1}\bigl(Q_i-g(\Phi(x_i))\bigr)^2,
+  \label{eq:calib}
+\end{equation}
+$\mathcal{G}$ 取岭回归与梯度提升两类，按域分层 5 折交叉验证选择，报告 $R^2_{\mathrm{cv}}$ 与逐域残差。第二步，对 A17 中域 $k\in\mathcal{D}_{\mathrm{m}}$ 的每篇文本 $x$ 计算 $\widehat Q(x)=\hat g(\Phi(x))$，聚合（A18 的词数信息作 token 加权）得全部 17 域的估计质量分 $\widehat Q_k$ 及自助法置信区间。对 direct/near\_direct 的 6 个域，$\widehat Q_k$ 与由 A1--A3 模型分直接算得的 $Q_{\varphi(k)}$ 互为校验；样本过少的域（ubuntu\_irc 16 篇、philpapers 67 篇）标记为低置信，仅列区间。
+\end{definition}
+
+\begin{definition}[训练边际价值与解耦检验]\label{def:value}
+由式~\eqref{eq:transfer-effect}，定义域 $k$ 对目标损失的训练边际价值为中心化系数的相反数：
+\begin{equation}
+  \nu_k=-\Bigl(\bar\beta_k-\tfrac{1}{17}\textstyle\sum_{k'}\bar\beta_{k'}\Bigr),
+  \qquad
+  \bar\beta_k=\sum_{j\in\mathcal{D}_{\mathrm{v}}} w_j\,\beta_{jk},
+  \label{eq:value}
+\end{equation}
+$\nu_k>0$ 表示向域 $k$ 转移份额平均而言降低目标损失。核心检验为质量分与训练价值的秩相关
+\begin{equation}
+  \rho_{Q\nu}=\operatorname{Spearman}\bigl(\{\widehat Q_k\}_{k=1}^{17},\,\{\nu_k\}_{k=1}^{17}\bigr),
+  \label{eq:decouple}
+\end{equation}
+原假设 $H_0:\rho_{Q\nu}=0$（质量与训练价值无序关联）。无论检验结果如何均如实报告：若 $\rho_{Q\nu}$ 显著为正，说明质量分对配比选择有先验指导价值；若不显著或为负（RegMix 关于 pile\_cc 的发现预示此可能），则定量证实“内在质量不等于训练价值”，配比必须由实验回归确定——这一结论将作为问题二引入配比修正项、问题三将 $Q$ 与 $\bm{p}$ 设为独立决策变量的依据。
+\end{definition}
+
+\begin{definition}[数据驱动的组间权重（候选方案 c）]\label{def:lambda-driven}
+利用同一桥接，把 Meta-rater“权重由代理实验反推”的思想在本题数据上实现：
+\begin{equation}
+  \bm{\lambda}^{\mathrm{drv}}
+  =\arg\max_{\bm{\lambda}\in\Delta^{G-1}}
+  \operatorname{Spearman}\Bigl(\bigl\{\widehat Q_k(\bm{\lambda})\bigr\}_{k\in\mathcal{K}},\,
+  \{\nu_k\}_{k\in\mathcal{K}}\Bigr),
+  \label{eq:lambda-driven}
+\end{equation}
+其中 $\mathcal{K}$ 主分析取 direct/near\_direct 的 6 域，敏感性分析扩至 17 域。由于 $|\mathcal{K}|$ 很小，该方案可识别性弱，仅作为候选与等权方案对照，不单独支撑结论。
+\end{definition}
+
+\subsection{求解流程与验证清单}\label{sec:p1-pipeline}
+
+整体求解按以下步骤执行，括号内为对应数据与产出：
+
+\begin{enumerate}
+  \item 数据审计：核对 A1--A18 行列结构、配比行和、\texttt{index} 对齐（已发现 A10/A11 需取 63 组交集），建立证据分层标签（直接观测 / 规则复算 / 校准推断 / 外推）。
+  \item 质量评分：按定义~\ref{def:scalarize}--\ref{def:domain-q} 在 A1 上构建 $Q_i$ 与 $Q_d$，规则冻结后应用于 A2/A3；以 KS 检验与分位数图比较 A1 对应域与 A2/A3 的分布一致性。（产出：七域质量分布、双口径域级分及置信区间）
+  \item 冲突分析：按定义~\ref{def:conflict}--\ref{def:resolve} 构建冲突集、人工抽查、标定消解规则，并在 A2/A3 上检验冲突比例迁移。（产出：冲突矩阵、类型表、消解前后评分变动）
+  \item 配比回归与优化：按定义~\ref{def:mix-reg}--\ref{def:opt-mix} 拟合、选型、求 $\bm{p}^\star$。（产出：份额转移效应表、最优配比与收益区间）
+  \item 跨尺度验证：按定义~\ref{def:cross-scale} 在 1M 留出、60M、1B 上报告 $\mathrm{MAE}$、$\rho^{(s)}$、top-$k$ 遗憾。（产出：假设~\ref{asm:transfer} 的实证结论）
+  \item 桥接与检验：按定义~\ref{def:calibration}--\ref{def:value} 复算 A17 规则特征、校准 $\hat g$、估计 $\widehat Q_k$、检验 $\rho_{Q\nu}$。（产出：17 域质量分、解耦检验结论）
+  \item 接口冻结：将 $Q$（token 口径）、$\bm{p}$ 与 $L_{\mathrm{tgt}}(\cdot)$、评价权重 $\bm{w}$、证据分层标签作为问题二至四的统一输入。
+\end{enumerate}
