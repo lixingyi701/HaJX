@@ -20,7 +20,9 @@
 
 ## 评分后的冲突诊断
 
-四组标准化指标的域内百分位秩极差作为冲突度；A1 冲突率曲线最大弦距肘部给出 $\tau=0.71$。A1/A2/A3 冲突率为 **19.08%/24.52%/23.28%**；首要方向依次为“轻量分类器高×规则型低”“DSIR 高×轻量分类器低”“DSIR 高×规则型低”。冲突率与聚合器改动前相同，因为计算只依赖标准化指标。冲突标记不反向改变主 $Q$；本轮不输出旧的 `Q_resolved`。
+现行 Step3 先用 A1 每域每指标的中秩经验分布，冻结应用于 A2/A3，再按 RPS(11)、DSIR(3)、轻量分类器(2)、FineWeb-Edu(1)、QuRating(4)、ModernBERT(4) 六来源汇总。每个来源一个中心排名；来源内另报指标排名跨度、两端并存和留一偏离。A1 各域来源间极差 $B$ 的 P95 是高分歧筛查阈值，因此 A1 候选比例约 5% 是**阈值定义**，不是真实冲突率。A1/A2/A3 高分歧候选比例为 **5.00%/4.73%/4.99%**，其中两侧各至少两个来源支持的对立候选为 **1.36%/1.58%/1.77%**；单指标独有候选为 **5.62%/4.05%/4.22%**，与前述类别不相加。A1 RPS 域内排名 Kendall $W=0.140$，逐篇来源内部跨度中位数 0.625，说明原四组中位数不足以描述其内部异质性。
+
+旧四组原口径仍完整复算：A1 阈值 $\tau=0.71$，三集候选比例 **19.08%/24.52%/23.28%**，但只作历史对照。直接比较的 Jaccard 为 **0.188/0.130/0.155**；以 A1 各域前 5% 配平、四组参照也冻结后，Jaccard 为 **0.324/0.283/0.259**。新法把旧 G4 模型评分器内部的 FineWeb-Edu、QuRating、ModernBERT 来源对立单列，其加权方向份额在三集为 **4.44%/19.33%/3.68%**。差异既有分组，也有来源中心、排名参照和阈值口径的变化，不能单独归因于某一步。诊断从不反向改写 CRITIC 加权 Huber 主 $Q$；没有人工质量标签，候选比例和一致性都不是准确率。
 
 ## 桥接与 17 域质量
 
@@ -39,8 +41,12 @@ Dirichlet 搜索的候选配比和 GBDT 损失预测不依赖 Q，故保持不�
 ## 表和接口
 
 - `tables/T2_delta_selection.csv`、`T2_dsir_length_diagnostic.csv`、`T2_extreme_influence.csv`：A1 $\delta$、测量校正和单个极端指标影响。
-- `tables/T2_domain_quality.csv`、`T3_extended_recheck.csv`、`T4_bridge_validation.csv`、`T5_lambda_interaction.csv`：本轮域分、冲突、桥接和质量交互。
+- `tables/T2_domain_quality.csv`、`T4_bridge_validation.csv`、`T5_lambda_interaction.csv`：本轮域分、桥接和质量交互。
+- `tables/T3_A1_frozen_reference.csv`、`T3_indicator_diagnostics.csv`、`T3_six_source_consistency.csv`、`T3_source_internal.csv`、`T3_six_source_candidate_summary.csv`、`T3_source_opposition_pairs.csv`、`T3_direction_stability.csv`、`T3_threshold_sensitivity.csv`：现行六来源诊断；完整 A1 经验参照另存 `cache/step3_a1_reference.pkl`。
+- `tables/T3_legacy_four_recheck.csv`、`T3_legacy_four_type_by_domain.csv`、`T3_legacy_stability.csv`：旧四组历史复算和匹配前 5% 预算比较。`figures/F3_source_internal.png`、`F3_source_opposition.png`、`F3_legacy_overlap.png`、`F3_matched_overlap.png` 展示来源内外分歧及两种旧新重合口径。
 - `tables/T8_old_new_domain_ranking.csv`、`T8_old_new_agreement.csv`：仅审计旧条件几何与新 Huber，不进入主接口。
 - `interface/P1_Q_sample.csv.gz`、`P1_Q_domain.csv`、`P1_p_star.csv`、`P1_summary.json`：沿用同一个主质量口径；配比主模型系数及迁移矩阵另有对应 P1 文件。
 
-旧 `T2_conflict_thresholds.csv` 和 `T3_resolution_effect.csv` 已删除。所有 17 域以域名连接，不能依赖 CSV 行序。本轮范围止于问题一 P1 输出，不重算问题三。
+T3 表均按 `dataset` 和 `domain` 定位；`domain=ALL` 是该集全体。`high_disagreement_candidate_rate` 以该行全部文档为分母；`multi_source_opposition_rate` 是其中满足双侧来源支持的占全部文档比例。`within_source_opposition_rate` 只表示来源内同时有排名两端的指标，FineWeb-Edu 的来源内列记 NA。`T3_source_opposition_pairs.share_of_between_candidates` 的分母是六来源高分歧候选，且一篇文档的多个有向来源对合计权重为 1；`T3_direction_stability` 将其映回旧四组，旧列则以旧四组候选为分母。`T3_legacy_stability` 同时报历史阈值与匹配 A1 前 5% 预算的重合度，不能把两种 Jaccard 混用。`T3_manual_check_samples.csv` 仅含复核行号与诊断元数据，含附件原文摘要的版本保存在未跟踪的 `cache/step3_manual_samples_with_text.csv`。所有 T3 文件都只供诊断，不作为下游评分接口。
+
+旧 `T2_conflict_thresholds.csv`、`T3_resolution_effect.csv` 以及未标明 legacy 的 T3 四组表已删除；老论文中的 `F3_conflict_rate_curve.png` 仍是历史四组图，不代表现行六来源诊断。所有 17 域以域名连接，不能依赖 CSV 行序。本轮范围止于问题一 P1 输出，不重算问题三。
