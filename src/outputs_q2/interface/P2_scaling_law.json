@@ -4,72 +4,54 @@
   "alpha": 0.34,
   "B": 410.59408396525816,
   "beta": 0.28,
-  "kappa_N": 0.4314999999999998,
-  "kappa_D": 0.14049999999999996,
-  "k0": 0.14072944202606927,
-  "q_shape": "lin",
-  "form": "L_core = E + A·N^-α·[1+κN(1−Q)] + B·D^-β·[1+κD(1−Q)] + k0·(1−Q); p=p*",
-  "family": "嵌套族 M0–M4(+floor)，形状 lin/pow/exp；主模型由 CV/F 检验选出，见 T21/T21b",
-  "p_channel": "exploratory_total_log_additive",
+  "kappa_N": 0.2076,
+  "kappa_D": 0.15800000000000003,
+  "k0": 0.0,
+  "q_shape": "pow",
+  "selected_model": "M4 完全耦合",
+  "form": "L = E + [A·N^{-α}·Q^{-κ_N} + B·D^{-β}·Q^{-κ_D}] · exp(s_red(N)·φ̃(p))",
+  "degeneration": "Q=1 且 φ̃=0（B 的隐含配比）时精确等于 E+A N^{-α}+B D^{-β}",
+  "family": "幂次嵌套族 M0–M4；线性+地板仅为对照，见 T21/T21b",
+  "selection_rule": "leave-N CV 不差于最优 2% 时，若 M3⊂M4 的 F 检验 p<0.01 则取 M4，否则取 M3",
+  "scale_source": "问题一 Step6 汇总（step6_scale.npz 不在磁盘上；数值来自该步已输出的三尺度系数尺度）",
+  "p_channel": {
+    "phi_def": "φ(p)=13 域等权 mean(β_1M·clr(p))，均匀配比处为 0，单位是 1M 的 ln L",
+    "phi_pstar": -0.1380603395554745,
+    "phi_uniform": 0.0,
+    "reference": "m=1 对应附件 B 的隐含配比（Pythia/The Pile），不是 p*",
+    "s_red_rule": "s_red(N)=s0+s1·log10(N/1e6)",
+    "s0": 1.30713930209531,
+    "s1_per_decade": 0.40957321206609504,
+    "s_at": {
+      "1M": {
+        "s_obs": 1.0031,
+        "s_red": 1.4264
+      },
+      "60M": {
+        "s_obs": 0.8661,
+        "s_red": 1.7425
+      },
+      "1B": {
+        "s_obs": 0.7719,
+        "s_red": 2.7095
+      }
+    },
+    "note": "s_obs 下降慢于可约份额，故不把 s_red 收成常数"
+  },
+  "Q_anchor": "Q_B = Q_A（问题一领域质量，已在 (0,1]）",
+  "Q0_main": 0.6608889991022963,
+  "noise_sigma": 0.08105467308535763,
+  "b6_points_in_b7": 360,
+  "legacy_not_used": {
+    "kN": 0.44,
+    "kD": 0.14,
+    "k0": 0.13753769382996678,
+    "rmse": 0.04966271696196401,
+    "why": "加性地板使 E 依赖 Q，不满足 Q=1 退化"
+  },
   "s_p": {
     "s0": 1.003128843576256,
     "s1_per_decade": -0.07706522026754299,
-    "rule": "s(N)=max(s0 + s1·log10(N/1e6), 0)",
-    "s_at": {
-      "1M": 1.0031,
-      "60M": 0.8661,
-      "1B": 0.7719
-    },
-    "source": "问题一 Step6 三尺度重拟合系数漂移（cache/step6_scale.npz），未读附件 A"
-  },
-  "fbar_pstar": 1.5376646112277208,
-  "fbar_def": "13 验证域等权 mean_v[b_v + β_v·clr(p)]，系数见 outputs_q1/interface/P1_f_p_coefficients.csv",
-  "Q_anchor": {
-    "general": "Q_B = 1 − b·(q* − q̄(p))；仿射形式在聚合可加假设下可证，q*、b 不可由数据识别",
-    "main": "q*=1, b=1 ⇒ Q_B = q̄(p)（题面建议：完美教材 ⇔ 经典式；Q0 取自附件 A 评分；Q∈(0,1]）",
-    "alt": "q*=q̄(p*)=0.6609, b=1/q* ⇒ Q_B = q̄(p)/0.6609（当前推荐配比语料 ⇔ 经典式，敏感性口径）",
-    "note": "κN、κD、k0 在 B 自身的 Q 网格上估计，与锚点无关"
-  },
-  "Q0_main": 0.6608889991022963,
-  "Q0_alt": 1.0,
-  "q_domain_range": [
-    0.509086707736352,
-    0.7706568296998739
-  ],
-  "noise_sigma": 0.049651600117027045,
-  "legacy_additive_form": {
-    "form": "L = L0 + (1-Q)(k0 + k1·N^-α)",
-    "k0": 0.19216752088905506,
-    "k1": 175.28798069278614,
-    "note": "旧主模型 = 新主模型在 κD=0 处的特例（κN=k1/A）"
-  },
-  "q_mapping": {
-    "main": {
-      "name": "identity",
-      "formula": "Q_B = Q_A",
-      "parameters": {},
-      "support": [
-        0.0,
-        1.0
-      ],
-      "clip_policy": "error",
-      "evidence_level": "题面语义锚点假设",
-      "source": "doc/Q2/问题二_SPEC.md"
-    },
-    "alt": {
-      "name": "pstar_anchor",
-      "formula": "Q_B = Q_A / Qbar_pstar",
-      "parameters": {
-        "Qbar_pstar": 0.6608889991022963
-      },
-      "support": [
-        0.0,
-        1.0
-      ],
-      "clip_policy": "error",
-      "evidence_level": "敏感性假设；部分领域超出 B 数据支持域",
-      "source": "doc/Q2/问题二_SPEC.md"
-    }
-  },
-  "p_channel_evidence": "s(N) 含 A6–A11 重拟合数据；不满足留出集仅评估要求，不是已验证的四变量主律"
+    "rule": "s_obs(N)=max(s0+s1·log10(N/1e6), 0)，乘在问题一的 ∂lnL/∂p 上"
+  }
 }
