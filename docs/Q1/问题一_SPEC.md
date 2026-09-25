@@ -65,6 +65,16 @@ $$Q(x)=\arg\min_{q\in[0,1]}\sum_{j=1}^{25}w_j\rho_\delta(z_j(x)-q),\qquad
 
 **结果文件与图。**人可读 A1 参照与阈值、六来源总体一致性、25 指标诊断、来源内分歧、逐集逐域候选汇总、来源对立方向及映回旧组的比较、阈值敏感性、旧四组完整类型及稳定性分别写入 `T3_A1_frozen_reference.csv`、`T3_six_source_consistency.csv`、`T3_indicator_diagnostics.csv`、`T3_source_internal.csv`、`T3_six_source_candidate_summary.csv`、`T3_source_opposition_pairs.csv`、`T3_direction_stability.csv`、`T3_threshold_sensitivity.csv` 与 `T3_legacy_*.csv`。`F3_source_internal.png` 显示绝对内部跨度，`F3_source_opposition.png` 显示来源方向，`F3_threshold_sensitivity.png` 显示操作点变化，`F3_legacy_overlap.png` 与 `F3_matched_overlap.png` 分别显示原阈值和配平预算下的旧新重合。`T3_manual_check_samples.csv` 仅含抽样行号和诊断元数据；附件原文摘要只写入被忽略的本地 `cache/step3_manual_samples_with_text.csv` 供人工复核，不冒充已完成标注，也不提交附件文本。
 
+### 2.3-补：来源一致性加权 Q_v2（实验性对照）
+
+**方法。**以 §2.3 各来源 Kendall $W$ 作先验可靠性乘数，将原 CRITIC 权重 $w_j$ 调整为 $\tilde w_j = w_j \cdot W_{s(j)}$，归一化后代入 §2.2 的同一 Huber 二分法（复用同一 $\delta=0.403491$，A2/A3 冻结参数）。调整只发生在权重层，不修改 25 列标准化矩阵、$\delta$、桥接标签或任何 P1 接口。**Q_v2 是实验性对照分，不替换主质量口径 $Q$。**
+
+**权重变化方向。**RPS（$W=0.140$）各指标均值权重从 0.0403 降至 0.0124；DSIR（$W=0.967$）从 0.0270 升至 0.0574；FineWeb-Edu（设 $W=1.0$，单指标）从 0.0359 升至 0.0790；QuRating（$W=0.675$）从 0.0342 升至 0.0508；ModernBERT（$W=0.579$）从 0.0521 升至 0.0663；轻量分类器（$W=0.691$）小幅上升。方向与来源内部一致性高低吻合。
+
+**结果。**Q_v2 与主 $Q$ 的全局 Spearman：A1 **0.9547**，A2 **0.9207**，A3 **0.9395**。三集质量排序高度一致，加权调整不颠覆原有名次。A1 各域 Q_v2 中位数（降序）：arxiv **0.8009**、commoncrawl **0.6428**、stackexchange **0.6421**、c4 **0.6216**、book **0.6012**、github **0.5907**、wikipedia **0.5408**；域级排序与主 $Q$ 完全一致。原四组冲突文档（`old_four_c1 ≥ 0.71`，9,776 条，占 19.08%）与非冲突文档在 $Q_\mathrm{v2} - Q$ 分布上存在可见差异，但差异量级较小，不足以说明权重调整针对冲突文档有特殊修正效果。
+
+**数据含义与边界。**Spearman 只衡量排序相似度，不是 Q_v2 更准确的证据。Kendall $W$ 来自 §2.3 的 A1 子样本估计，本身有采样误差；此调整只是先验权重缩放，没有利用文档级冲突信息或任何下游质量标签。结果写入 `T3_Q_v2_summary.csv`、`T3_Q_v2_weight_comparison.csv`、`T3_Q_v2_comparison.csv`（域级中位数对比）、`T3_Q_v2_conflict_diff.csv`（冲突文档差值分布），图件为 `F3_Q_v2_weight_comparison.png`、`F3_Q_v2_scatter_A1.png`、`F3_Q_v2_domain_median.png`、`F3_Q_v2_conflict_diff_dist.png`，均位于 `src/outputs_q1/`。
+
 ### 2.4 桥接到 17 个配比域并修正区间口径
 
 **方法、定义。**从 A1/A18 原文各自复算 11 个同名近似规则特征 $\Phi(text)$；它们不保证逐位复现附件 `rps_*`。A1 取 21,590 篇，以 §2.2 **同一个主 $Q$** 作标签，按领域分层五折比较 Ridge 与 GBDT；每折的特征均值和标准差仅用训练折估计。选较优者用 A1 全部训练子集拟合，对 A18 的 31,340 篇预测并逐域聚合。六个 direct/near_direct 映射域的 `Q_final` 取对应 A1 质量域主 $Q$ 中位数，`CI_lo/CI_hi` 同取该 A1 域主分 bootstrap；11 个 inferred 域的 `Q_final` 与区间同取 A18 预测中位数和文档 bootstrap。A18 对照预测及区间另存 `Q_med`、`CI_calibrated_lo/hi`。`Q_tokenw` 也按最终来源取值。
@@ -152,5 +162,6 @@ $$Q(x)=\arg\min_{q\in[0,1]}\sum_{j=1}^{25}w_j\rho_\delta(z_j(x)-q),\qquad
 | 2026-09-25 01:27 后 | 新增 DSIR 长度诊断、极端指标影响和旧新排序审计；更新 Spec、结果说明及 P1 接口验收。 |
 | 2026-09-25 01:53 | 补充三项诊断的数据含义、对问题一结论的影响和证据边界；区分 DSIR 长度诊断与评分后的组间冲突率。 |
 | 2026-09-25 02:28 | 先更新 §2.3 六来源规范，再实现 A1 冻结单指标参照、逐篇来源内外分歧、旧四组原口径与匹配前 5% 预算对照；重跑 A1/A2/A3 并补实测结果、表图与验收口径。 |
+| 2026-09-25（本次）| 新增 §2.3-补 来源一致性加权 Q_v2 实验性对照：运行 `q1_03b_source_consistency_Q.py`，产出 `T3_Q_v2_*.csv`（×4）及 `F3_Q_v2_*.png`（×4）；记录全局 Spearman A1=0.9547/A2=0.9207/A3=0.9395、权重变化方向与冲突文档差值分布；更新本 SPEC。 |
 
 本轮没有独立文档质量真值标签，只能报告稳健性、内部一致性和下游敏感性，**不能宣称新 Huber 主分已被证明比旧方法更准确**。

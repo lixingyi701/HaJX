@@ -1,114 +1,268 @@
-\subsection{问题一的模型建立与求解}
+\subsection{问题一：质量评价、冲突诊断与领域配比建模}
 
-\subsubsection{模型建立}
+\subsubsection{数据预处理与指标方向统一}
 
-\textbf{(a) 综合质量评分：CRITIC + 加权几何平均。}指标 $j$ 的信息量同时取决于对比强度 $\sigma_j$ 与它和其他指标的冲突性 $\sum_k(1-r_{jk})$：
+附件 A1 为 7 个质量领域的分层抽样集，含 51{,}230 篇文档；A2 为 17{,}523 篇 arxiv 全量文档，A3 为 203{,}752 篇 github 全量文档。22 个原始质量字段经标量化后展开为 25 个指标。表~\ref{tab:q1_fields} 汇总每个字段的含义和处理口径。
+
+\begingroup
+\small
+\begin{longtable}{@{}p{4.0cm}p{3.1cm}p{5.0cm}p{1.45cm}@{}}
+\caption{问题一的 22 个原始字段及其方向统一方法}
+\label{tab:q1_fields}\\
+\toprule
+原始字段 & 含义 & 标量化与预处理 & 方向 \\
+\midrule
+\endfirsthead
+\multicolumn{4}{c}{表~\thetable\ （续）}\\
+\toprule
+原始字段 & 含义 & 标量化与预处理 & 方向 \\
+\midrule
+\endhead
+\midrule
+\multicolumn{4}{r}{续下页}\\
+\endfoot
+\bottomrule
+\endlastfoot
+\path{fineweb_edu} & 教育价值评分 & 取唯一分值；按正向指标变换、缩尾和归一化。 & 正向\\
+\path{fluency_en} & 英文流畅度分类器 & 二分类 logits 经 softmax，取标签 1（流畅）概率。 & 正向\\
+\path{ad_en} & 广告识别分类器 & 二分类 logits 经 softmax，取标签 1（无广告）概率。 & 正向\\
+\path{qurater} & 写作、专业知识、事实性、教育价值 & 拆为 4 个分项指标，分别变换和归一化。 & 正向\\
+\path{modernbert_professionalism} & 专业性 & 六档 logits 经 softmax，取 $0$--$5$ 档期望分。 & 正向\\
+\path{modernbert_readability} & 可读性 & 六档 logits 经 softmax，取 $0$--$5$ 档期望分。 & 正向\\
+\path{modernbert_reasoning} & 推理性 & 六档 logits 经 softmax，取 $0$--$5$ 档期望分。 & 正向\\
+\path{modernbert_cleanliness} & 内容洁净度 & 六档 logits 经 softmax，取 $0$--$5$ 档期望分。 & 正向\\
+\path{dsir_books} & 与 Books 参考分布的匹配信号 & 先除以词数，再在 A1 同域内对 $\log(1+\text{词数})$ 回归取残差。 & 正向\\
+\path{dsir_wiki} & 与 Wiki 参考分布的匹配信号 & 先除以词数，再在 A1 同域内对 $\log(1+\text{词数})$ 回归取残差。 & 正向\\
+\path{dsir_math} & 与 Math 参考分布的匹配信号 & 先除以词数，再在 A1 同域内对 $\log(1+\text{词数})$ 回归取残差。 & 正向\\
+\path{rps_doc_word_count} & 文档词数 & 适宜区间型：取 $\log(1+x)$ 后，转为距 A1 同域中位数的负绝对偏差。 & 适宜区间\\
+\path{rps_doc_num_sentences} & 文档句子数 & 适宜区间型：取 $\log(1+x)$ 后，转为距 A1 同域中位数的负绝对偏差。 & 适宜区间\\
+\path{rps_doc_mean_word_length} & 平均词长 & 适宜区间型：非负时先取 $\log(1+x)$，再计算距 A1 同域中位数的负绝对偏差。 & 适宜区间\\
+\path{rps_doc_unigram_entropy} & 单词分布熵 & 适宜区间型：非负时先取 $\log(1+x)$，再计算距 A1 同域中位数的负绝对偏差。 & 适宜区间\\
+\path{rps_doc_frac_no_alph_words} & 不含字母字符的词比例 & 取反向分，使该比例较低时得分较高。 & 负向取反\\
+\path{rps_doc_frac_unique_words} & 独特词比例 & 保留正向关系。 & 正向\\
+\path{rps_doc_frac_chars_top_2gram} & 高频二元字符片段比例 & 取反向分，使重复片段占比较低时得分较高。 & 负向取反\\
+\path{rps_doc_frac_chars_top_3gram} & 高频三元字符片段比例 & 取反向分，使重复片段占比较低时得分较高。 & 负向取反\\
+\path{rps_lines_uppercase_letter_fraction} & 行内大写字母比例 & 取反向分，使大写字母占比较低时得分较高。 & 负向取反\\
+\path{rps_lines_ending_with_terminal_punctution_mark} & 以终止标点结尾的行比例 & 保留正向关系；字段拼写沿用附件。 & 正向\\
+\path{rps_lines_numerical_chars_fraction} & 行内数字字符比例 & 取反向分，使数字字符占比较低时得分较高。 & 负向取反\\
+\end{longtable}
+\endgroup
+
+四个 ModernBERT 字段按各自六档概率的期望值标量化，QuRating 的四个维度分别计入，因此最终有 25 个指标。三个 DSIR 分数先除以 $\max(\text{词数},1)$，再按 A1 各领域分别对 $\log(1+\text{词数})$ 做带截距 OLS，使用残差作为长度校正后的信号。对于正向指标保留原方向，负向指标取相反数；对词数、句数、平均词长和词熵，以接近 A1 同域中位数为优。对适用的非负重尾值取 $\log(1+x)$（DSIR 残差允许为负值，不强制取对数），随后在 A1 各领域各指标上进行 1\%/99\% 缩尾和 Min--Max 归一化到 $[0,1]$，缺失值以 A1 同域同指标中位数填补。方向、缩尾端点、归一化锚点、填补值和 DSIR 回归参数均只由 A1 拟合，A2/A3 冻结复用；所有标准化指标均为“越高越好”。
+
+在 A1 的 7 域、3 项 DSIR 共 21 个“指标—词数”组合中，绝对 Spearman 相关的中位数由原量的 0.957 降至除词数后的 0.599，再降至残差化后的 0.095；book 域仍有最高 $|\rho|=0.503$ 的剩余相关。相关下降说明长度关联减弱，不证明被去除的信息全部无用。
+
+\subsubsection{综合质量评价模型与 A1--A3 结果}
+
+在 A1 标准化矩阵 $Z=(z_j)$ 上，CRITIC 权重同时考虑指标的离散程度 $s_j$ 和与其他指标的冗余程度 $r_{jk}$：
 \begin{equation}
-C_j=\sigma_j\sum_{k=1}^{25}\bigl(1-r_{jk}\bigr),\qquad
-w_j=\frac{C_j}{\sum_kC_k},\qquad
-Q(x)=\prod_{j=1}^{25}z_j(x)^{\,w_j}.
+C_j=s_j\sum_{k=1}^{25}(1-r_{jk}),\qquad
+w_j=\frac{C_j}{\sum_{\ell=1}^{25}C_\ell},\qquad
+\sum_{j=1}^{25}w_j=1.
 \label{eq:critic}
 \end{equation}
-式~\eqref{eq:critic} 中 $r_{jk}$ 为指标间的相关系数。选择 CRITIC 而不用熵权，是因为 CRITIC 会自动惩罚冗余指标；选择几何平均，是为了实现“短板支配”：广告概率等短板项趋于零时，总分被显著压低，这与工业界一票否决式过滤的方向一致，同时保留了连续性\cite{critic,fineweb}。域级分取样本中位数，并给出 bootstrap 95\% CI（$B=2000$）。
-
-\textbf{(b) 冲突定义与消解。}把 25 个指标按信号来源分为四组：规则型、DSIR、轻量分类器、模型评分器。组内 Kendall $W$ 分别为 $0.128/0.998/0.627/0.447$，说明冲突主要发生在组间。据此把组分数转为域内分位排名 $R_g(x)\in[0,1]$，定义
+样本 $x$ 的唯一主质量分定义为这 25 个正向指标的 CRITIC 加权 Huber 中心：
 \begin{equation}
-c(x)=\max_gR_g(x)-\min_gR_g(x),\qquad x\ \text{为冲突样本}\iff c(x)>\tau,
-\label{eq:conflict}
+Q(x)=\arg\min_{q\in[0,1]}
+\sum_{j=1}^{25}w_j\rho_{\delta}\!\left(z_j(x)-q\right),\qquad
+\rho_{\delta}(u)=
+\begin{cases}
+\frac{1}{2}u^2,& |u|\leq\delta,\\
+\delta\left(|u|-\frac{1}{2}\delta\right),& |u|>\delta,
+\end{cases}
+\quad \delta=0.403491.
+\label{eq:q1_huber}
 \end{equation}
-其中阈值 $\tau$ 取冲突率—阈值曲线的最大曲率点，不预先设定。消解采用 Huber 连续降权：文档 $x$ 的组 $g$ 相对其自身中位排名偏离 $\mathrm{dev}_g$，权重为 $u_g=\min(1,\tau_z/|\mathrm{dev}_g|)$，与 CRITIC 权重相乘后重新归一，再代入式~\eqref{eq:critic} 得到修正分 $\widetilde Q$\cite{huber}。
-
-\textbf{跨体系桥接。}11 个 inferred 域没有质量信号。我们自实现 11 个 rps 规则算子 $\Phi(\text{text})$，在 A1 上（$n=21{,}590$）学习校准函数 $\hat g:\Phi\mapsto\widetilde Q$，再对 A18 的 17 域原文（31{,}340 篇）计算 $\hat Q_d$。
-
-\textbf{(c) 配比—损失模型：clr 回归。}配比满足 $\sum p_i=1$，直接回归会把机械的此消彼长误读为领域间的替代\cite{aitchison}。对 $\bp$ 做中心对数比变换 $z_i=\ln\bigl(p_i/g(\bp)\bigr)$，其中 $g(\bp)$ 为几何均值，零分量乘性替换为 $10^{-4}$。对每个验证域在对数空间回归：
+该一维凸优化用导数方程二分求解。Huber 中心在近中心指标上采用平方损失，对少数远离中心的指标采用线性损失，降低单项极端值的影响。$\delta$ 按 A1 的加权 MAD 稳健尺度规则确定，A2/A3 沿用。领域质量取该域样本 $Q(x)$ 的中位数，并以 2{,}000 次文档 bootstrap 给出 95\% 区间：
 \begin{equation}
-\ln L_v=b_v+\sum_{i=1}^{17}\beta_{v,i}\,z_i+\varepsilon_v,\qquad v=1,\dots,13,
-\label{eq:clr}
+Q_d=\operatorname{median}_{x\in d}Q(x).
+\label{eq:q1_domain}
 \end{equation}
-用 Huber 损失抵抗异常配方。系数经链式法则折算到单纯形切空间，得到迁移矩阵 $T_{iv}=\partial\ln L_v/\partial p_i$（在均匀配比处取值）。最优配比为
-\begin{equation}
-\bp^*=\arg\min_{\bp\in\Delta^{16}}\ \frac1{13}\sum_{v=1}^{13}\hat L_v(\bp).
-\label{eq:pstar}
-\end{equation}
-
-\subsubsection{求解方法}
-
-评分管线对 A1（21{,}590 篇）、A2（arxiv 全量 17{,}523 篇）、A3（github 全量 203{,}752 篇）逐块流式计算。对照方法组包括：等权几何平均；PCA（取累计方差 $80.6\%$ 的 10 个主成分）；以 CRITIC 权重加权的 TOPSIS；K-means 三档聚类。桥接校准函数用域分层五折交叉验证，在梯度提升与岭回归之间选型。式~\eqref{eq:clr} 在 1M 训练集上拟合，以梯度提升作为非线性对照。式~\eqref{eq:pstar} 以训练配比均值为中心，用多浓度 Dirichlet 采样 $10^5$ 个候选，由梯度提升模型打分，取最优的前 100 个求平均。跨尺度部分用 1M 系数直接预测 1M 留出 / 60M / 1B 三个检验集，并对 A12–A15 估计截距漂移律 $b_v(N)=b_v^0+\rho_v\ln(N/10^6)$。
-
-\subsubsection{结果与分析}
-
-\textbf{质量评分。}CRITIC 排序与等权、TOPSIS、PCA 的样本级 Spearman 相关分别为 $0.991$、$0.946$、$0.871$。三种互不蕴含的赋权假设给出高度一致的排序，说明质量结构是数据内在的。七域排序为 arxiv（$0.713$）$>$ stackexchange（$0.590$）$>$ commoncrawl（$0.557$）$>$ github（$0.533$）$>$ book（$0.511$）$>$ c4（$0.499$）$>$ wikipedia（$0.484$），见图~\ref{fig:q1box}。扩展集复算与 A1 对应子集的 KS 检验为 $D=0.021\ (p=0.60)$ 与 $D=0.012\ (p=0.12)$，Cohen's $d\approx0.005$，抽样集具有代表性。
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=.74\textwidth]{q12_F2_domain_quality_box.png}
-\caption{A1 七域质量分布（CRITIC 加权几何平均）}
-\label{fig:q1box}
-\end{figure}
-
-\textbf{冲突。}最大曲率点给出 $\tau=0.75$，冲突率为 $21.5\%$（图~\ref{fig:q1conf}），这否定了《数据说明》中“冲突率约 0\%”的说法。冲突与领域强相关（$\chi^2=142.4$，df $=6$，$p\approx10^{-23}$）。主冲突类型“DSIR 高 × 规则型低”在 A1/A2/A3 中分别占 $19.6\%/15.1\%/18.1\%$，扩展集冲突率为 $21.1\%/22.9\%$，结论在扩展集上成立。抽查 30 篇原文后确认两类成因：LaTeX 与代码文本专业价值高而表层流畅度低；模板化网页规则统计量好而教育价值低。Huber 消解保持原有排序（$\rho(Q,\widetilde Q)=0.997$）：冲突样本平均下调 $0.0033$，非冲突样本仅变动 $-0.0004$，做到了降权而不删除。
-
-\begin{figure}[H]
-\centering
-\begin{minipage}{.46\textwidth}\centering
-\includegraphics[width=\linewidth]{q12_F3_conflict_rate_curve.png}
-\caption{冲突率—阈值曲线与最大曲率点}
-\label{fig:q1conf}
-\end{minipage}\hfill
-\begin{minipage}{.5\textwidth}\centering
-\includegraphics[width=\linewidth]{q12_F4_bridge_17domains.png}
-\caption{17 配比域质量分（误差条为 95\% CI）}
-\label{fig:q1bridge}
-\end{minipage}
-\end{figure}
-
-\textbf{桥接。}梯度提升校准的 $R^2_{\mathrm{cv}}=0.31$，优于岭回归的 $0.25$。在 6 个有映射的域上，校准分与官方分的 Pearson 相关为 $0.70$，MAE 为 $0.055$。17 域中 arxiv 最高（$0.716$），dm\_mathematics 最低（$0.355$），见图~\ref{fig:q1bridge}；ubuntu\_irc（16 篇）与 philpapers（63 篇）标为低置信。
-
-\textbf{配比—损失关系。}表~\ref{tab:q1model} 显示，clr 变换使检验集 $R^2$ 由 $0.654$ 提高到 $0.772$，这就是处理闭合效应带来的量化改进\cite{regmix}。梯度提升（$0.897$）说明存在域间交互，因此\emph{系数解释用线性模型、最优搜索用非线性模型}；两者在 $10^5$ 个候选上的秩相关为 $0.77$。迁移矩阵（图~\ref{fig:q1tm}）中 13 个自域效应全部为负，dm\_mathematics 的自域效应最强（$-2.47$）。加入质量交互项 $\lambda_v\sum_ip_i(1-\hat Q_{d(i)})$ 后，$10/13$ 个验证域的 $\lambda_v$ 显著，但符号在域间不一致（中位数 $-0.249$，arxiv 为 $+0.79$）。因此质量与配比应分别进入问题二的模型，不能合并为单一乘子。
 
 \begin{table}[H]
 \centering\small
-\caption{配比—损失模型对照（1M 检验集，256 组）}
-\label{tab:q1model}
-\begin{tabular}{lccl}
+\caption{A1 七个抽样领域的质量分及其在 A2、A3 全量集中的对应结果}
+\label{tab:q1_domain_quality}
+\begin{tabular}{@{}lrp{5.0cm}p{4.5cm}@{}}
 \toprule
-模型 & 平均 $R^2$ & RMSE & 说明 \\
+领域 & A1 样本数 & A1 中位数（95\%区间） & 对应全量集\\
 \midrule
-裸配比 OLS（RegMix 原式） & 0.654 & 0.432 & 未处理闭合效应 \\
-\textbf{clr + Huber（本文）} & \textbf{0.772} & \textbf{0.320} & 系数可解释，用于迁移矩阵 \\
-梯度提升（非线性对照） & 0.897 & — & 用于最优配比搜索 \\
+arxiv & 1{,}419 & 0.7707 [0.7671, 0.7754] & A2：0.7697 [0.7688, 0.7705]\\
+book & 171 & 0.6313 [0.6138, 0.6500] & --\\
+c4 & 10{,}000 & 0.6545 [0.6525, 0.6566] & --\\
+commoncrawl & 9{,}640 & 0.6761 [0.6739, 0.6784] & --\\
+github & 10{,}000 & 0.6172 [0.6157, 0.6189] & A3：0.6158 [0.6154, 0.6162]\\
+stackexchange & 10{,}000 & 0.6600 [0.6582, 0.6621] & --\\
+wikipedia & 10{,}000 & 0.5991 [0.5971, 0.6015] & --\\
 \bottomrule
 \end{tabular}
 \end{table}
 
+A1 的七域排序为 arxiv、commoncrawl、stackexchange、c4、book、github、wikipedia。与 CRITIC 加权算术均值、PCA、TOPSIS 的样本排名 Spearman 相关分别为 0.9936、0.8166、0.9588；这些是方法间一致性，不是质量真值验证。对 A1 中极端程度最高的 10\% 文档，分别剔除距加权中位数最远的单项指标并重新归一权重后，Huber 分数绝对变化中位数为 0.0260，CRITIC 加权算术均值为 0.0374，说明 Huber 对这一种单项扰动较不敏感。
+
+图~\ref{fig:q1box} 展示 A1 各域样本分布。A1 的 arxiv 与 github 抽样子集分别和 A2、A3 全量记录比较，KS 检验 $p$ 值为 0.313 和 0.220；未检出分布差异，但这不等同于证明抽样完全代表总体。A1 与扩展集对应域的中位数也相近：arxiv 为 0.7707 与 0.7697，github 为 0.6172 与 0.6158。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.78\textwidth]{q1_F2_domain_quality_box.png}
+\caption{A1 七个领域的 Huber 质量分呈现领域差异，同时抽样量较少的 book 分布更宽}
+\label{fig:q1box}
+\end{figure}
+
+\subsubsection{质量冲突的定义、诊断与跨集复验}
+
+评分完成后，按指标来源将 25 项指标划为 RPS（11 项）、DSIR（3 项）、轻量分类器（2 项）、FineWeb-Edu（1 项）、QuRating（4 项）和 ModernBERT（4 项）六个来源。对每篇文档，先用 A1 同域指标经验分布将标准化值转为中秩 $r_j(x)$，再计算来源内中位数 $m_s(x)$。在 A1 同域同来源的 $m_s$ 经验分布上再次取中秩，得到来源可比位置 $u_s(x)$。来源间分歧度定义为六个来源位置的极差：
+\begin{equation}
+r_j(x)=F_{dj}^{A1,\mathrm{mid}}\!\left(z_j(x)\right),\qquad
+m_s(x)=\operatorname{median}_{j\in I_s}r_j(x),\qquad
+u_s(x)=F_{ds}^{A1,\mathrm{mid}}\!\left(m_s(x)\right),\qquad
+B(x)=\max_s u_s(x)-\min_s u_s(x).
+\label{eq:q1_conflict}
+\end{equation}
+A1 每个领域 $B(x)$ 的第 95 百分位作为高分歧候选的筛查阈值；高端与低端立场分别指 $u_s\geq0.8$ 与 $u_s\leq0.2$。只有分歧超过阈值且高低两侧各至少有两个来源支持时，才称为“多来源对立候选”。A2/A3 冻结复用 A1 的单指标参照、来源参照和阈值。该 P95 是预先确定的筛查预算，A1 约 5\% 的候选比例不是实际冲突率。来源内部跨度、两端意见并存和单指标留一偏离另行诊断，避免来源中心掩盖内部异质性。
+
+\begin{table}[H]
+\centering\small
+\caption{A1 冻结规则下三组数据的评分后分歧候选比例}
+\label{tab:q1_conflict_rates}
+\begin{tabular}{lrrr}
+\toprule
+数据集 & 高分歧候选 & 多来源对立候选 & 单指标独有候选\\
+\midrule
+A1 抽样集 & 5.00\% & 1.36\% & 5.62\%\\
+A2 arxiv 全量 & 4.73\% & 1.58\% & 4.05\%\\
+A3 github 全量 & 4.99\% & 1.77\% & 4.22\%\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A1 的来源内部诊断显示，六来源 Kendall $W$ 分别为 RPS 0.140、DSIR 0.967、轻量分类器 0.691、FineWeb-Edu（单指标，不适用）、QuRating 0.675、ModernBERT 0.579。文档内指标排名的 $P_{90}-P_{10}$ 中位数在 RPS 为 0.625，而 DSIR 为 0.037、QuRating 为 0.277、ModernBERT 为 0.315；另有 69.45\% 的文档在 RPS 指标中同时出现低于 20\% 与高于 80\% 的相对排名。这说明 RPS 来源内部异质性明显，来源中心本身不足以完整描述其信号。A1 的高分歧候选中，加权方向份额最大的来源对为“RPS 高、FineWeb-Edu 低”（8.03\%）；这是诊断方向分布，不足以确认冲突原因或任一来源更准确。
+
+相同冻结规则在 A2、A3 上得到相近的高分歧候选比例；多来源对立候选分别占 1.58\% 和 1.77\%，单指标独有候选为 4.05\% 和 4.22\%。A2 中最高加权来源对为“ModernBERT 高、FineWeb-Edu 低”（9.89\%），A3 中为“RPS 高、FineWeb-Edu 低”（13.03\%）。以上均是候选筛查结果，且没有独立人工质量标签，不能据此称为实际冲突率、测量错误率或已确认成因。历史四来源口径的候选率为 19.08\%/24.52\%/23.28\%，其分组和阈值与现行六来源规则不同，只作为诊断对照；在 A1 前 5\% 配平预算后，旧新候选的 Jaccard 为 0.324/0.283/0.259，表示两种诊断筛选对象并不相同。
+
 \begin{figure}[H]
 \centering
 \begin{minipage}{.48\textwidth}\centering
-\includegraphics[width=\linewidth]{q12_F5_transfer_matrix.png}
-\caption{迁移矩阵 $T_{iv}$（蓝色为增配降损）}
-\label{fig:q1tm}
+\includegraphics[width=\linewidth]{q1_F3_source_internal.png}
+\caption{RPS 来源的域内指标差异大于其他多指标来源}
+\label{fig:q1internal}
 \end{minipage}\hfill
 \begin{minipage}{.48\textwidth}\centering
-\includegraphics[width=\linewidth]{q12_F7_quality_vs_value.png}
-\caption{域级质量与训练边际价值（$\rho=-0.06$）}
-\label{fig:q1qv}
+\includegraphics[width=\linewidth]{q1_F3_source_opposition.png}
+\caption{六来源分析将高低立场组合拆分呈现}
+\label{fig:q1opposition}
 \end{minipage}
 \end{figure}
 
-\textbf{最优配比。}等权口径下 $\bp^*$ 的前五位为：pile\_cc $15.6\%$、stackexchange $10.0\%$、wikipedia $9.5\%$、pubmed\_central $9.1\%$、arxiv $8.9\%$（图~\ref{fig:q1pstar}）。相对均匀配比，预测降损 $9.9\%$（梯度提升点估计；线性模型 bootstrap 95\% CI 为 $[9.7\%,14.1\%]$）。pile\_cc 单域口径下 pile\_cc 占 $33.2\%$，复现了 RegMix“网页语料对下游最有利”的结论。域级质量 $\hat Q_d$ 与训练边际价值的秩相关仅为 $-0.06$（图~\ref{fig:q1qv}），说明内在质量不等于训练价值，配比必须由实验回归确定。
+\begin{figure}[H]
+\centering
+\begin{minipage}{.48\textwidth}\centering
+\includegraphics[width=\linewidth]{q1_F3_threshold_sensitivity.png}
+\caption{A1 冻结分歧阈值改变候选筛查比例}
+\label{fig:q1threshold}
+\end{minipage}\hfill
+\begin{minipage}{.48\textwidth}\centering
+\includegraphics[width=\linewidth]{q1_F3_matched_overlap.png}
+\caption{统一 A1 筛查预算后，旧四来源和六来源仍筛出不同文档}
+\label{fig:q1matched}
+\end{minipage}
+\end{figure}
+
+\paragraph{来源一致性加权对照实验}
+为检验 §2.3 Kendall $W$ 所揭示的来源内部一致性差异是否影响质量排序，将原 CRITIC 权重 $w_j$ 乘以对应来源的 Kendall $W$ 后重新归一化：
+\begin{equation}
+\tilde w_j = w_j \cdot W_{s(j)}\bigg/\sum_{\ell=1}^{25}w_\ell\cdot W_{s(\ell)},
+\label{eq:q1_wv2}
+\end{equation}
+再代入式~\eqref{eq:q1_huber} 的同一 Huber 二分法（$\delta=0.403491$ 不变，A2/A3 参数冻结），得到对照质量分 $Q_{\mathrm{v2}}$。权重变化方向与来源内部一致性一致：RPS（$W=0.140$）各指标均值权重由 0.0403 降至 0.0124；DSIR（$W=0.967$）由 0.0270 升至 0.0574；FineWeb-Edu（设 $W=1.0$）由 0.0359 升至 0.0790。
+
+$Q_{\mathrm{v2}}$ 与主 $Q$ 的全局 Spearman 相关在 A1/A2/A3 分别为 \textbf{0.9547}、\textbf{0.9207}、\textbf{0.9395}，质量排序高度一致。A1 各域 $Q_{\mathrm{v2}}$ 中位数（降序）：arxiv 0.8009、commoncrawl 0.6428、stackexchange 0.6421、c4 0.6216、book 0.6012、github 0.5907、wikipedia 0.5408；域级排序与主 $Q$ 完全相同。对原四组冲突文档（$c_1\geq0.71$，9{,}776 条）与非冲突文档分别统计 $Q_{\mathrm{v2}}-Q$ 分布，两组存在可见差异，但差异量级较小，不足以说明来源一致性加权对冲突文档有专向修正效果。Spearman 仅衡量排序相似度，$Q_{\mathrm{v2}}$ 是实验性对照分，不替换主质量口径 $Q$，也不更新任何 P1 接口。
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=.8\textwidth]{q12_F7_p_star.png}
-\caption{两种评价口径下的最优配比 $\bp^*$}
+\begin{minipage}{.48\textwidth}\centering
+\includegraphics[width=\linewidth]{q1_F3_Q_v2_scatter_A1.png}
+\caption{A1 上 $Q_{\mathrm{v2}}$ 与主 $Q$ 的散点分布（Spearman = 0.9547）}
+\label{fig:q1v2scatter}
+\end{minipage}\hfill
+\begin{minipage}{.48\textwidth}\centering
+\includegraphics[width=\linewidth]{q1_F3_Q_v2_domain_median.png}
+\caption{A1 各域 $Q_{\mathrm{v2}}$ 与主 $Q$ 中位数对比，域级排序不变}
+\label{fig:q1v2domain}
+\end{minipage}
+\end{figure}
+
+\subsubsection{17 域配比、交叉熵损失及质量关系建模}
+
+\paragraph{从七个质量领域桥接到十七个配比领域}
+A16 将 17 个配比领域对应为 3 个 direct、3 个 near\_direct 和 11 个 inferred 域。对 6 个 direct/near\_direct 域，直接采用映射到的 A1 域主质量分中位数及其 bootstrap 区间；对 11 个 inferred 域，以 A1 的 21{,}590 篇可用原文和同一主 $Q$ 为训练标签，使用 11 个可复算的规则特征进行按领域分层五折选型，再将选出的 GBDT 应用于 A18 的 31{,}340 篇有效文档，按配比域取预测中位数及文档 bootstrap 区间。五折均值 $R^2=0.4106$（Ridge 对照为 0.3415）；在 6 个映射域上的 Pearson 相关为 0.6549、Spearman 相关为 0.7714、MAE 为 0.0365（$n=6$）。17 域中 arxiv 最高（0.7707），dm\_mathematics 最低（0.5091）。映射区间以 A16 对应关系成立为条件，inferred 区间不含桥接模型选择及跨域偏差；ubuntu\_irc（16 篇）和 philpapers（63 篇）需谨慎使用。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.86\textwidth]{q1_F4_bridge_17domains.png}
+\caption{17 域质量分依据映射等级取直接评分或桥接预测，误差条为同源 bootstrap 区间}
+\label{fig:q1bridge}
+\end{figure}
+
+\paragraph{十七域配比与验证交叉熵的定量关系}
+A4、A5 分别提供 512 组训练配比和 13 个验证域的交叉熵损失，按 \texttt{index} 连接。对配比向量 $\bp=(p_1,\ldots,p_{17})$ 中非正份额以 $10^{-4}$ 替代并重新闭合，再作中心对数比变换：
+\begin{equation}
+\operatorname{clr}(\bp)_i=\log p_i-\frac{1}{17}\sum_{k=1}^{17}\log p_k,\qquad
+\log L_v=b_v+\sum_{i=1}^{17}\beta_{vi}\operatorname{clr}(\bp)_i+\varepsilon_v,\quad v=1,\ldots,13.
+\label{eq:clr}
+\end{equation}
+主解释模型为逐验证域 Huber 回归，原始份额 OLS 和 GBDT 用作对照。由线性模型在均匀配比处求导，得到 $17\times13$ 的局部迁移矩阵：
+\begin{equation}
+T_{iv}=17\left(\beta_{vi}-\bar\beta_v\right),\qquad
+\bar\beta_v=\frac{1}{17}\sum_{i=1}^{17}\beta_{vi}.
+\label{eq:q1_transfer}
+\end{equation}
+在 A6/A7 的 1M 留出集上，三个模型的平均逐域 $R^2$ 分别为 clr+Huber 0.772、裸配比 OLS 0.654、GBDT 0.897。对 13 域等权综合目标，clr+Huber 的 $R^2$ 为 0.260，裸 OLS 为 0.418；因此 clr+Huber 的优势体现在逐域拟合与系数解释，不是每个汇总目标上都更优。GBDT 作为非线性对照并用于候选配比预测。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.84\textwidth]{q1_F5_transfer_matrix.png}
+\caption{均匀配比附近的迁移矩阵显示增配不同领域对各验证域损失的局部影响}
+\label{fig:q1tm}
+\end{figure}
+
+\paragraph{配比与质量的关系及候选配比}
+17 域质量分沿用前述直接映射或桥接的 $Q_i$。配比下的加权平均质量及其与验证损失的附加关系分别表示为
+\begin{equation}
+\bar Q(\bp)=\sum_{i=1}^{17}p_iQ_i,\qquad
+\log L_v=b_v+\sum_{i=1}^{17}\beta_{vi}\operatorname{clr}(\bp)_i
++\lambda_v\sum_{i=1}^{17}p_i(1-Q_i)+\varepsilon_v.
+\label{eq:q1_pq}
+\end{equation}
+质量交互项以 400 次案例 bootstrap 评估，13 个验证域中仅 6 个区间不含零，且系数有正有负；它是关联分析，不能解释为质量的因果效应。17 域 $Q_i$ 与训练边际价值的 Spearman 相关为 $-0.211$，样本量有限，说明质量排序不能替代配比实验。
+
+以 A4 平均配比为中心，从四档浓度 Dirichlet 分布生成 99{,}996 个候选，由 GBDT 分别按 13 域等权损失和 pile\_cc 单域损失评分，取各自前 100 个候选的平均配比。等权候选的头部领域为 pile\_cc 15.5\%、stackexchange 10.0\%、wikipedia\_en 9.5\%、pubmed\_central 9.1\%、arxiv 8.9\%。等权候选、pile\_cc 候选与均匀配比的当前加权质量分别为 0.6609、0.6603 和 0.6606。相较均匀配比，GBDT 预测降损为 9.915\%；固定候选后，线性模型 bootstrap 的收益中位数为 11.90\%，95\% 区间为 [9.72\%,14.12\%]。两项分别来自不同模型，后者不是 GBDT 点估计的置信区间。
+
+pile\_cc 单域候选经前百平均后，其自身目标 Loss 为 5.608，高于等权候选的 5.530；因此两组份额均作为搜索候选报告，不能把平均后的 pile\_cc 份额称为复评最优解。以上降损也只是代理模型预测，尚未经重新训练实测。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.92\textwidth]{q1_F7_p_star.png}
+\caption{两种损失目标对应不同的候选配比}
 \label{fig:q1pstar}
 \end{figure}
 
-\textbf{跨尺度验证与外推。}\label{sec:q1-scale}用 1M 系数直接预测三尺度留出集，目标损失排名的 Spearman 相关为 $0.52/0.47/0.68$（图~\ref{fig:q1rank}），排序中等程度保持，但绝对预测失效。系数漂移分解显示，\textbf{截距显著下漂，斜率几乎不变}（$\max_i|\rho_\beta|\approx0.007$）。对 A12–A15，直接套用 1M 系数的 MAE 约为 $3.5$，经漂移律修正后降到 $0.10$。外推最稳健的是 arxiv 与 pubmed\_central（$\rho>0.85$），最不稳健的是 pile\_cc 与 pubmed\_abstracts（$\rho<0.40$）。由此假设 2 的适用边界是：排序效应可迁移，绝对水平需要做尺度修正。
+\begin{figure}[H]
+\centering
+\includegraphics[width=.82\textwidth]{q1_F7_quality_vs_value.png}
+\caption{17 域质量与训练边际价值的秩相关较弱}
+\label{fig:q1qv}
+\end{figure}
+
+\paragraph{A6--A11 检验与 A12--A15 外推稳健性}
+\label{sec:q1-scale}
+用 A4/A5 拟合的 1M 线性模型冻结预测 A6/A7 的 1M 留出集、A8/A9 的 60M 集和 A10/A11 的 1B 集，目标损失排序 Spearman 分别为 0.523、0.467、0.677。60M 和 1B 的绝对损失预测失效（平均逐域 $R^2$ 分别为 $-7.69$ 和 $-604.66$），所以排序保持不代表绝对量可迁移；1B 检验集只有 64 组。
+
+A12--A15 的 10B、70B 表均为估算/外推值，不是实际训练观测。在这些表上直接套用 1M 系数，MAE 分别为 3.53 和 3.91，Spearman 为 $-0.532$ 和 $-0.588$；再按观测尺度系数漂移作修正后，MAE 降为 0.104 和 0.108，但 Spearman 仍为 $-0.089$ 和 $-0.040$。这仅表明估算表上的绝对误差对漂移修正较敏感，不构成对真实大规模训练的外部验证，也不支持稳健排序外推。
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=.5\textwidth]{q12_F6_rank_decay.png}
-\caption{配比排序可迁移性随规模的变化}
+\includegraphics[width=.68\textwidth]{q1_F6_rank_decay.png}
+\caption{冻结 1M 模型在观测尺度上只保留有限的配比排序能力}
 \label{fig:q1rank}
 \end{figure}

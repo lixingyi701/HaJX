@@ -8,10 +8,10 @@
 |---|---|
 | `算力约束下提升大语言模型能力的资源配置建模.docx` | 赛题正文（只读，一切要求的最终依据） |
 | `附件/` | 赛题数据（A/B/C 三组，约 530 MB）。**已被 .gitignore 忽略，绝不提交** |
-| `docs/` | 定稿文档：`Q1/` 各问方案与执行计划、`写作/` 论文 LaTeX 与 PDF、`会议纪要/`、`附件数据字典与处理办法对照.md` |
+| `docs/` | 定稿文档：`Q1/`、`Q2/`、`Q4/` 各问规格，`Q34/` 问题三四方案与结果汇报，`写作/`、`会议纪要/`、`附件数据字典与处理办法对照.md` |
 | `chaos/` | 草稿区：调研、方法草稿、提示词等。**内容为未定稿，与 docs/ 定稿冲突时以 docs/ 为准** |
 | `tech_reports/` | 参考技术报告 PDF（Chinchilla、RegMix、FineWeb、DeepSeek-V3 等），只读参考 |
-| `code/`、`outputs/`、`figs/` | 代码、中间结果（Parquet/CSV）、图。按问组织子目录（如 `code/q1/`）。尚未创建，写代码时按此约定建立 |
+| `src/code_qN/`、`src/outputs_qN/`、`src/final_report/` | 按问题组织的代码、结果与图，以及完整论文；`src/outputs_qN/` 下的 `interface/` 是下游输入 |
 
 约定流程：想法先进 `chaos/`，经数据实测核查、团队确认后移入 `docs/` 定稿。
 
@@ -28,7 +28,7 @@
 ## 环境与代码
 
 - Python：本机系统 `python3`（3.9）与 conda 各环境**均未装 pandas/numpy/scipy**；`uv` 可用（`~/.local/bin/uv`）。开始写代码前先建环境（如 `uv venv && uv pip install pandas numpy scipy scikit-learn statsmodels matplotlib`；`lightgbm`、`xgboost` 默认不装，用 `sklearn.ensemble.HistGradientBoostingRegressor` 替代）。
-- 代码放 `code/qN/`（N 为问题号，脚本按 `00_io.py`、`01_expand.py`… 编号），中间结果放 `outputs/qN/`（Parquet/CSV），图放 `figs/qN/`。每个问题收尾时在 `outputs/qN/README.md` 写字段说明与下游读取方式。
+- 代码放 `src/code_qN/`（N 为问题号，脚本按步骤编号），中间结果放 `src/outputs_qN/tables/`、`interface/`，图放 `src/outputs_qN/figures/`。每个问题收尾时在 `src/outputs_qN/README.md` 写字段说明与下游读取方式。
 - 训练/检验分离铁律：如 A4/A5 训练的模型，A6–A11 只做评估，绝不参与拟合。
 
 ## 团队与协作
