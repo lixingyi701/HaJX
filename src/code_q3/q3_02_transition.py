@@ -14,11 +14,18 @@ q3_02_transition.py — 问题三·Step5/7：结构性转移的定义、识别�
 【敏感性】L_ctx 五档、Q0 相图、η ±50%、问题二 bootstrap (E,A,B,κ_N,κ_D,k0)。
 产出：tables/T2_*.csv, interface/P3_structural_transition.json, P3_sensitivity_Lctx.csv, F5-F7
 """
+import hashlib
 import json
+import subprocess
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from q3_00_model import (PAR, ETA, LCTX_CRIT, Q0_MAIN, Q0_WEB, G_LIST, LCTX_C7, TAB, FIG,
-                         IFACE, ROOT, loss, solve, c_crit, phi_ratio, N_star_closed,
+from q3_00_model import (PAR, ETA, LCTX_CRIT, Q0_MAIN, Q0_WEB, M_STAR, G_LIST, LCTX_C7, TAB, FIG,
+                         IFACE, ROOT, P2_PATH, P1_SUMMARY_PATH, P_STAR_PATH, P1_Q_PATH, C7_PATH,
+                         P_STAR_DOMAINS, EVIDENCE, S_RED, PHI_TILDE, CLASS_TOL, TIE_ATOL, C7_READ,
+                         loss, solve, c_crit, phi_ratio, N_star_closed, _profile, G_FUNCS,
                          setup_cjk_matplotlib)
 
 Q0S = {"主口径p*加权": Q0_MAIN, "副口径网页pile_cc": Q0_WEB}
@@ -37,6 +44,44 @@ def bisect_phi(g, Lc, Q0, lo=15.0, hi=26.0, it=50):
         if phi_ratio(10 ** m, g, Lc, Q0, Q0) > 1: hi = m
         else: lo = m
     return (lo + hi) / 2
+
+
+def scan_events(frame):
+    """扫描上的状态变化。平滑离开或到达也各计一次；内点 Q 大幅跳动记分支切换。"""
+    s = frame.sort_values("log10C")
+    reg = s.regime.to_numpy().astype(int)
+    q = s.Q.to_numpy()
+    lc = s.log10C.to_numpy()
+    events = []
+    for i in range(1, len(s)):
+        dq = float(q[i] - q[i - 1])
+        left, right = int(reg[i - 1]), int(reg[i])
+        if left != right:
+            kinds = []
+            if left == 0 and right == 2:
+                kinds = ["LEAVE_Q0", "REACH_Q1"]
+            elif left == 0 and right > 0:
+                kinds = ["LEAVE_Q0"]
+            elif right == 2 and left < 2:
+                kinds = ["REACH_Q1"]
+            else:
+                kinds = [f"{left}->{right}"]
+            for kind in kinds:
+                events.append(dict(
+                    kind=kind, log10C_left=round(float(lc[i - 1]), 4),
+                    log10C_right=round(float(lc[i]), 4),
+                    Q_left=float(q[i - 1]), Q_right=float(q[i]),
+                    smooth=bool(abs(dq) < 0.05),
+                    coarse_step=bool(left == 0 and right == 2),
+                ))
+        elif right == 1 and abs(dq) > 0.05:
+            events.append(dict(
+                kind="BRANCH_SWITCH", log10C_left=round(float(lc[i - 1]), 4),
+                log10C_right=round(float(lc[i]), 4),
+                Q_left=float(q[i - 1]), Q_right=float(q[i]),
+                smooth=False, coarse_step=False,
+            ))
+    return events
 
 
 def local_criteria(S, g, Lc, q0name):
@@ -71,13 +116,14 @@ if __name__ == "__main__":
                                  B_sQ_peak=cB, sQ_peak=sQmax,
                                  C_DN_kink=cC, DN_slope_dev=devC))
     T = pd.DataFrame(rows)
-    T["spread_ABC_dex"] = T[["A_leave_Q0", "B_sQ_peak", "C_DN_kink"]].max(1) - \
-        T[["A_leave_Q0", "B_sQ_peak", "C_DN_kink"]].min(1)
+    _abc = T[["A_leave_Q0", "B_sQ_peak", "C_DN_kink"]]
+    T["spread_ABC_dex"] = _abc.max(axis=1) - _abc.min(axis=1)
     T.to_csv(f"{TAB}/T2_ccrit_three_criteria.csv", index=False, encoding="utf-8-sig")
     pd.set_option("display.width", 250)
     print(T[T.L_ctx == 2048].round(3).to_string(index=False))
-    print("Φ 解析根 vs 数值二分 最大偏差 %.4f dex" % (T.A_phi_analytic - T.A_leave_Q0).abs().max())
-    print("三口径最大分歧 %.3f dex" % T.spread_ABC_dex.max())
+    phi_gap = (T.A_phi_analytic - T.A_leave_Q0).abs()
+    print("Φ 局部根 vs 全局离开点，有限样本最大偏差 %.4f dex" % np.nanmax(phi_gap.to_numpy()))
+    print("三口径最大分歧 %.3f dex（仅两侧都有限的行）" % np.nanmax(T.spread_ABC_dex.to_numpy()))
 
     # ============ 2. KKT Φ 曲线（验证：Φ 穿 1 处即 Q* 离开 Q0） ============
     Cs = 10 ** np.linspace(17, 23, 61)
@@ -157,44 +203,71 @@ if __name__ == "__main__":
     traps.append(dict(陷阱="C=1e22 时 N*=1.2e-3B, D*=850B, Loss=3.41",
                       核对=f"该配置仅用预算 {6*N_t*D_t/1e22:.2%}；按本文标度律 L={loss(N_t, D_t, 1.0):.3f}，"
                            f"而真实最优 L={OPT[(OPT.L_ctx==2048)&(OPT.log10C==22)].L_opt.min():.3f}、N*≈5e9"))
-    n_corner = int((OPT.regime == "Q0角点(不提质)").sum())
-    n_inner = int(OPT.regime.str.startswith("内点").sum())
+    n_corner = int((OPT.state == "LOWER").sum())
+    n_inner = int((OPT.state == "INTERIOR").sum())
     sub = OPT[OPT.Q_opt < 1 - 1e-6]
     lcs = "/".join(f"1e{int(v)}" for v in sorted(sub.log10C.unique()))
     gs = "/".join(sorted(sub.g.unique()))
     traps.append(dict(陷阱="各档预算 Q*=1，无需比较成本函数",
                       核对=f"210 组最优解中 {n_corner} 组 Q*=Q0（不提质）、{n_inner} 组内点（部分提质），"
                            f"全部出现在 C={lcs} 的{gs}；对数型在同档已提满 ⇒ 成本函数形式决定是否提质"))
+    key18 = pd.read_csv(f"{TAB}/T1_key18_crosscheck.csv")
     traps.append(dict(陷阱="穷举网格 + 罚系数取 1",
-                      核对="约束取等后 D 可解析反解，问题降为无约束二维搜索，无需罚函数；"
-                           f"粗网格与本文求解器的 Loss 差 ≤ {pd.read_csv(f'{TAB}/T1_solver_vs_grid.csv').L_gap.max():.1e}，"
-                           "但网格无法给出 C_crit 的连续识别"))
+                      核对="约束取等后 D 由预算反解。关键 18 组另用多起点 SLSQP 核对；"
+                           f"剖面减网格的损失差最小 {key18.gap_grid.min():.1e}，"
+                           f"剖面减 SLSQP 最小 {key18.gap_slsqp.min():.1e}。"))
     pd.DataFrame(traps).to_csv(f"{TAB}/T2_trap_check.csv", index=False, encoding="utf-8-sig")
 
     # ============ 接口 JSON ============
-    main = T[T.L_ctx == 2048]
     def finite_or_none(x):
-        return round(float(x), 3) if np.isfinite(x) else None
-    J = dict(definition=dict(
-        A="KKT 活跃约束集切换：Q*=Q0 角点 → 内点 → Q*=1 角点；解析判据 Φ(C)=1",
-        B="提质份额弹性 d ln s_Q / d ln C 由正转负（s_Q 极大）",
-        C="配置比斜率 d ln(D*/N*)/d ln C 偏离固定质量基准 (α-β)/(α+β)=%.4f 的极值点" % SLOPE0),
+        if isinstance(x, (float, np.floating)):
+            return round(float(x), 6) if np.isfinite(x) else None
+        if isinstance(x, (np.integer,)):
+            return int(x)
+        return x
+
+    scenarios = {}
+    tied_set = []
+    for rec in T.itertuples():
+        sub = S[(S.Q0口径 == rec.Q0口径) & (S.g == rec.g) & (S.L_ctx == rec.L_ctx)]
+        events = scan_events(sub)
+        ident = "NOT_IDENTIFIED" if not events else "FOUND"
+        key = f"{rec.Q0口径}|{rec.g}|L{int(rec.L_ctx)}"
+        hit = sub[sub.tied.astype(bool)] if "tied" in sub.columns else sub.iloc[0:0]
+        members = []
+        for row in hit.itertuples():
+            members.append(dict(
+                log10C=round(float(row.log10C), 4), N=float(row.N), D=float(row.D),
+                Q=float(row.Q), L=float(row.L), state=str(row.state), loss_gap=0.0,
+            ))
+        if members:
+            tied_set.append(dict(scenario=key, members=members[:30], n_members=len(members)))
+        scenarios[key] = dict(
+            leave_Q0=finite_or_none(rec.A_leave_Q0), leave_status=rec.A_leave_status,
+            reach_Q1=finite_or_none(rec.A_reach_Q1), full_status=rec.A_full_status,
+            phi_local_root=finite_or_none(rec.A_phi_analytic),
+            scan_identification=ident, scan_events=events,
+            phi_is_local_necessary_only=True,
+        )
+    spread = T.spread_ABC_dex.to_numpy()
+    J = dict(
+        definition=dict(
+            state="全局最优的质量约束状态：LOWER / INTERIOR / UPPER。连续离开 Q0 或到达 1 各计一次。",
+            phi="Φ=1 只是固定 Q 的局部一阶必要条件，不是全局切换的充分条件。",
+            auxiliary_B="提质份额峰值，不与全局临界点混称同一事件。",
+            auxiliary_C="d ln(D*/N*)/d ln C 相对无提质斜率 %.4f 的偏离极值，不与全局临界点混称同一事件。" % SLOPE0,
+        ),
+        analysis_interval_log10C=[17, 26],
+        class_tol=CLASS_TOL, tie_atol=TIE_ATOL,
         L_ctx_crit=LCTX_CRIT,
-        C_crit_Lctx2048={f"{r.Q0口径}|{r.g}": dict(leave_Q0=finite_or_none(r.A_leave_Q0),
-                                                     leave_status=r.A_leave_status,
-                                                     reach_Q1=finite_or_none(r.A_reach_Q1),
-                                                     full_status=r.A_full_status,
-                                                     phi_analytic=finite_or_none(r.A_phi_analytic),
-                                                     sQ_peak=round(r.B_sQ_peak, 3),
-                                                     DN_kink=round(r.C_DN_kink, 3))
-                         for r in main.itertuples()},
-        max_spread_three_criteria_dex=round(float(T.spread_ABC_dex.max()), 3),
-        bootstrap=[{k: (finite_or_none(v) if isinstance(v, (float, np.floating)) else v)
-                    for k, v in row.items()}
-                   for row in BS[["Q0口径", "g", "point", "p05", "p95", "n_found", "n_total"]]
-                   .to_dict("records")])
-    json.dump(J, open(f"{IFACE}/P3_structural_transition.json", "w"), ensure_ascii=False, indent=2,
-              allow_nan=False)
+        scenarios=scenarios,
+        tied_set=tied_set,
+        max_spread_three_criteria_dex=None if not np.isfinite(spread).any() else round(float(np.nanmax(spread)), 4),
+        bootstrap=[{k: finite_or_none(v) for k, v in row.items()}
+                   for row in BS[["Q0口径", "g", "point", "p05", "p95", "n_found", "n_total"]].to_dict("records")],
+    )
+    json.dump(J, open(f"{IFACE}/P3_structural_transition.json", "w", encoding="utf-8"),
+              ensure_ascii=False, indent=2, allow_nan=False)
 
     # ================= 作图 =================
     plt = setup_cjk_matplotlib()
@@ -219,7 +292,7 @@ if __name__ == "__main__":
     axes[2].set_xlabel("log₁₀ C"); axes[2].set_ylabel("d ln(D*/N*) / d ln C")
     axes[2].set_title("口径C：配置比斜率偏离基准"); axes[2].legend(fontsize=8)
     axes[2].set_ylim(-1.5, 1.5)
-    fig.suptitle("图5  结构性转移的三种识别口径（副口径 Q₀=0.889，L_ctx=2048）")
+    fig.suptitle(f"图5  三种辅助/局部口径（网页单域 Q₀={Q0_WEB:.3f}，L_ctx=2048；Φ 不是全局充分条件）")
     fig.tight_layout(); fig.savefig(f"{FIG}/F5_three_criteria.png"); plt.close(fig)
 
     # F6：Q0 相图
@@ -256,4 +329,63 @@ if __name__ == "__main__":
     axes[1].set_title("问题二参数不确定性下的临界预算")
     fig.suptitle("图7  临界预算的敏感性")
     fig.tight_layout(); fig.savefig(f"{FIG}/F7_ccrit_sensitivity.png"); plt.close(fig)
-    print("done")
+
+    def sha256(path):
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    git_exe = "git"
+    for candidate in (r"C:\Program Files\Git\cmd\git.exe", "git"):
+        try:
+            subprocess.check_output([candidate, "--version"], text=True)
+            git_exe = candidate
+            break
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+            continue
+    repo = str(Path(ROOT).parent)
+    try:
+        commit = subprocess.check_output([git_exe, "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+        dirty = bool(subprocess.check_output([git_exe, "status", "--porcelain"], cwd=repo, text=True).strip())
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        commit, dirty = None, None
+    inputs = {
+        "P1_p_star.csv": P_STAR_PATH,
+        "P1_summary.json": P1_SUMMARY_PATH,
+        "P1_Q_domain.csv": P1_Q_PATH,
+        "P1_scale_calibration.csv": f"{ROOT}/outputs_q1/interface/P1_scale_calibration.csv",
+        "P2_scaling_law.json": P2_PATH,
+        "P2_bootstrap.npz": f"{ROOT}/outputs_q2/interface/P2_bootstrap.npz",
+    }
+    if C7_READ:
+        inputs["C7_model_architecture_metadata.csv"] = str(C7_PATH)
+    outputs = [
+        f"{IFACE}/P3_optimal_config.csv",
+        f"{IFACE}/P3_sensitivity_Lctx.csv",
+        f"{IFACE}/P3_structural_transition.json",
+        f"{FIG}/F1_Qstar_vs_C.png",
+        f"{FIG}/F2_cost_shares.png",
+        f"{FIG}/F3_NDratio.png",
+    ]
+    now = datetime.now(timezone(timedelta(hours=8))).isoformat(timespec="seconds")
+    manifest = dict(
+        run_time_beijing=now, git_commit=commit, git_dirty=dirty,
+        model_shape="M4+F", q_mapping="identity", evidence=EVIDENCE,
+        m_star=M_STAR, m_star_source="exp(s_red_main * phi_tilde_pstar)",
+        s_red_main=S_RED, phi_tilde_pstar=PHI_TILDE,
+        c7_read=C7_READ,
+        c7_note=None if C7_READ else "附件 C7 原表不在当前工作区；五档上下文使用 Spec 已核对的情景集合，本次未重读 CSV。",
+        p_star_path="src/outputs_q1/interface/P1_p_star.csv",
+        p_star_column="p_star_eqweight", p_star_domains=P_STAR_DOMAINS,
+        p_star_sha256=sha256(P_STAR_PATH),
+        inputs={name: sha256(path) for name, path in inputs.items()},
+        search_bounds_log10N=[1.0, 17.0], class_tol=CLASS_TOL, tie_atol=TIE_ATOL,
+        cross_solver="SLSQP multi-start on (log10 N, Q); coarse grid",
+        random_seed=None,
+        outputs={path.replace("\\", "/").split("outputs_q3/")[-1]: sha256(path) for path in outputs},
+    )
+    json.dump(manifest, open(f"{IFACE}/P3_run_manifest.json", "w", encoding="utf-8"),
+              ensure_ascii=False, indent=2)
+    print("q3_02 done")

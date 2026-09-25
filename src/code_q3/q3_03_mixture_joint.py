@@ -24,6 +24,10 @@ RNG = np.random.default_rng(2026)
 IF1 = f"{ROOT}/outputs_q1/interface"
 
 if __name__ == "__main__":
+    raise SystemExit(
+        "q3_03_mixture_joint.py 仍是旧探索脚本：乘子作用于整个 Loss，并依赖 P1 内部模型。"
+        "问题三 Spec v6 的主试验不运行本脚本，也不把它的表图当作本版结果。"
+    )
     ps = pd.read_csv(f"{IF1}/P1_p_star.csv")
 
     dom = ps.domain.tolist()
