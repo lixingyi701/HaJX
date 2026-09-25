@@ -1,0 +1,31 @@
+{
+  "schema_version": "q4-independent-1.0",
+  "seed": 20260925,
+  "bootstrap": 1000,
+  "origin": null,
+  "cutoff": null,
+  "min_model_n": 30,
+  "min_frontier_n": 50,
+  "min_families": 10,
+  "min_quarters": 4,
+  "score_tolerance": 1e-06,
+  "license_allowlist": [
+    "apache-2.0",
+    "mit",
+    "bsd-2-clause",
+    "bsd-3-clause"
+  ],
+  "assumed_growth": null,
+  "overrides": null,
+  "pairs": null,
+  "config_provenance": {
+    "thresholds": "SPEC_CONSTANT_ENGINEERING_GUARDRAILS",
+    "license_allowlist": "CONSERVATIVE_METADATA_SCREEN_NOT_LICENSE_TEXT_VERIFICATION",
+    "family_id": "issuer account conservative cluster proxy; overrides supported",
+    "score_tolerance": "1e-6 point floating CSV consistency; C8 not rounded to hide deviations",
+    "origin": "last quarter-end preceding latest C2 evaluation quarter; coverage not guaranteed",
+    "forecast_growth": "DATA_ESTIMATE if enough C4 quarters, else explicit ASSUMED_SCENARIO",
+    "Q3": "DEFERRED_Q3_USER_AUTHORIZED_SYMBOLIC_INTERFACE"
+  },
+  "run_broad_sensitivity": true
+}
