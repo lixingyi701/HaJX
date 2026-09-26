@@ -176,8 +176,8 @@ if __name__ == "__main__":
     ax.bar(x, p_star_gb[order], wd, label="p*（GBDT 对照，13域等权）", color="#9ecae1")
     ax.bar(x + wd, p_star_cc[order], wd, label="p*（线性，pile_cc 口径）", color="#fd8d3c")
     ax.set_xticks(x, [DOM17[i] for i in order], rotation=60, ha="right", fontsize=8)
-    ax.set_ylabel("配比份额"); ax.legend(fontsize=8)
-    ax.set_title("最优配比 $p^*$：信赖域内 Dirichlet 采样 + top-100 平均")
+    ax.set_ylabel("领域配比 $p_i$"); ax.legend(fontsize=8)
+    ax.set_title("17 个训练领域的三组候选配比")
     fig.tight_layout(); fig.savefig(f"{FIGS}/F7_p_star.png"); plt.close(fig)
 
     # 图 7b：重绘 Step2 域级质量箱线（字体修正）

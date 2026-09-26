@@ -4,6 +4,11 @@
 # 本地数据（530MB，含 >100MB 单文件，待决定归档方式）
 附件/
 
+# Overleaf 云端同步工作区（经 OCLX 管理，不走 Git）
+doc/final_report_overleaf/
+doc/q2_updated_full_report_overleaf/
+doc/final_report_overleaf.zip
+
 # Q1 中间产物：二进制缓存 + 运行日志（不可 diff，不可 review）
 src/outputs_q1/cache/
 src/outputs_q1/log_step4.txt
@@ -12,7 +17,12 @@ src/outputs_q1/log_step4.txt
 src/outputs_q*/cache/
 src/outputs_q3/tables/T1_scan.pkl
 
-# LaTeX 编译中间文件
+# LaTeX 编译中间文件与本机工作区状态
+doc/final_report/.olcx/
+doc/final_report/.vscode/
+doc/final_report/main.synctex.gz
+doc/final_report/pdf/q1/
+doc/final_report/pdf/main_*.pdf
 *.aux
 *.log
 *.out

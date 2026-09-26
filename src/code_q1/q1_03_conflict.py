@@ -457,7 +457,7 @@ def export_figures(data, summary, compare, source_rows, pairs, sensitivity, old_
         ax.bar(x+(t-1)*width,v.median_internal_span.to_numpy(),width,label=tag)
     ax.set_xticks(x,SNAMES,rotation=25,ha="right")
     ax.set_ylabel("来源内指标排名 P90−P10 的文档中位数")
-    ax.set_title("RPS 内部跨度较大；FineWeb-Edu 单指标不定义内部跨度")
+    ax.set_title("同一来源各指标的评价差异：RPS 较大，DSIR 较小")
     ax.legend();fig.tight_layout();fig.savefig(f"{FIGS}/F3_source_internal.png");plt.close(fig)
 
     fig,ax=plt.subplots(figsize=(7,4.5))
@@ -465,8 +465,8 @@ def export_figures(data, summary, compare, source_rows, pairs, sensitivity, old_
     for tag in tags:
         p=sub[sub.dataset==tag].sort_values("A1_tail_quantile")
         ax.plot(100*p.A1_tail_quantile,100*p.high_disagreement_candidate_rate,"o-",label=tag)
-    ax.set_xlabel("A1 的 B 阈值分位 (%)");ax.set_ylabel("高分歧候选比例 (%)")
-    ax.set_title("阈值敏感性：A1 比例由操作点定义，并非真实冲突率")
+    ax.set_xlabel("A1 中评价差异 B 的阈值百分位 (%)");ax.set_ylabel("复核候选比例 (%)")
+    ax.set_title("同一 A1 阈值应用到 A2/A3 后的复核名单规模")
     ax.legend();fig.tight_layout();fig.savefig(f"{FIGS}/F3_threshold_sensitivity.png");plt.close(fig)
 
     fig,ax=plt.subplots(figsize=(7,4.2))
@@ -499,7 +499,7 @@ def export_figures(data, summary, compare, source_rows, pairs, sensitivity, old_
     ax.set_xticks(range(len(SNAMES)),SNAMES,rotation=35,ha="right")
     ax.set_yticks(range(len(SNAMES)),SNAMES)
     ax.set_xlabel("低端来源");ax.set_ylabel("高端来源")
-    ax.set_title("A1 高分歧候选的来源对立方向（每篇总权重为 1）")
+    ax.set_title("A1 评价分歧候选的高、低评价来源配对")
     fig.colorbar(im,ax=ax,label="候选中的加权占比 (%)")
     fig.tight_layout();fig.savefig(f"{FIGS}/F3_source_opposition.png");plt.close(fig)
 
