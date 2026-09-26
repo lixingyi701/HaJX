@@ -7,150 +7,64 @@
   "L_ctx_crit": 30000.0,
   "C_crit_Lctx2048": {
     "主口径p*加权|指数型": {
-      "leave_Q0": 19.059,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.355,
-      "full_status": "FOUND",
-      "phi_analytic": 19.059,
-      "sQ_peak": 20.35,
-      "DN_kink": 19.1
+      "leave_Q0": 19.059, "leave_status": "FOUND", "reach_Q1": 20.355,
+      "full_status": "FOUND", "phi_analytic": 19.059,
+      "sQ_peak": 20.35, "DN_kink": 19.1
     },
     "主口径p*加权|幂函数型": {
-      "leave_Q0": 19.529,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.106,
-      "full_status": "FOUND",
-      "phi_analytic": 19.529,
-      "sQ_peak": 20.1,
-      "DN_kink": 19.6
+      "leave_Q0": 19.529, "leave_status": "FOUND", "reach_Q1": 20.106,
+      "full_status": "FOUND", "phi_analytic": 19.529,
+      "sQ_peak": 20.1, "DN_kink": 19.6
     },
     "主口径p*加权|对数型": {
-      "leave_Q0": 18.579,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.579,
-      "full_status": "FOUND",
-      "phi_analytic": 18.904,
-      "sQ_peak": 18.6,
-      "DN_kink": 18.55
+      "leave_Q0": 18.579, "leave_status": "FOUND", "reach_Q1": 18.579,
+      "full_status": "FOUND", "phi_analytic": 18.904,
+      "sQ_peak": 18.6, "DN_kink": 18.55
     },
     "副口径网页pile_cc|指数型": {
-      "leave_Q0": 19.132,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.36,
-      "full_status": "FOUND",
-      "phi_analytic": 19.132,
-      "sQ_peak": 20.35,
-      "DN_kink": 19.2
+      "leave_Q0": 19.132, "leave_status": "FOUND", "reach_Q1": 20.36,
+      "full_status": "FOUND", "phi_analytic": 19.132,
+      "sQ_peak": 20.35, "DN_kink": 19.2
     },
     "副口径网页pile_cc|幂函数型": {
-      "leave_Q0": 19.585,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.115,
-      "full_status": "FOUND",
-      "phi_analytic": 19.585,
-      "sQ_peak": 20.15,
-      "DN_kink": 19.65
+      "leave_Q0": 19.585, "leave_status": "FOUND", "reach_Q1": 20.115,
+      "full_status": "FOUND", "phi_analytic": 19.585,
+      "sQ_peak": 20.15, "DN_kink": 19.65
     },
     "副口径网页pile_cc|对数型": {
-      "leave_Q0": 18.586,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.586,
-      "full_status": "FOUND",
-      "phi_analytic": 18.898,
-      "sQ_peak": 18.6,
-      "DN_kink": 18.55
+      "leave_Q0": 18.586, "leave_status": "FOUND", "reach_Q1": 18.586,
+      "full_status": "FOUND", "phi_analytic": 18.898,
+      "sQ_peak": 18.6, "DN_kink": 18.55
     }
   },
-  "max_spread_three_criteria_dex": 1.483,
+  "max_spread_three_criteria_dex": 1.482,
   "bootstrap": [
-    {
-      "Q0口径": "主口径p*加权",
-      "g": "指数型",
-      "point": 19.059,
-      "p05": 19.038,
-      "p95": 19.084,
-      "n_found": 300,
-      "n_total": 300
-    },
-    {
-      "Q0口径": "主口径p*加权",
-      "g": "幂函数型",
-      "point": 19.529,
-      "p05": 19.503,
-      "p95": 19.56,
-      "n_found": 300,
-      "n_total": 300
-    },
-    {
-      "Q0口径": "主口径p*加权",
-      "g": "对数型",
-      "point": 18.579,
-      "p05": 18.539,
-      "p95": 18.62,
-      "n_found": 300,
-      "n_total": 300
-    },
-    {
-      "Q0口径": "副口径网页pile_cc",
-      "g": "指数型",
-      "point": 19.132,
-      "p05": 19.109,
-      "p95": 19.158,
-      "n_found": 300,
-      "n_total": 300
-    },
-    {
-      "Q0口径": "副口径网页pile_cc",
-      "g": "幂函数型",
-      "point": 19.585,
-      "p05": 19.558,
-      "p95": 19.616,
-      "n_found": 300,
-      "n_total": 300
-    },
-    {
-      "Q0口径": "副口径网页pile_cc",
-      "g": "对数型",
-      "point": 18.586,
-      "p05": 18.546,
-      "p95": 18.627,
-      "n_found": 300,
-      "n_total": 300
-    }
+    {"Q0口径": "主口径p*加权", "g": "指数型", "point": 19.059, "p05": 19.038, "p95": 19.084, "n_found": 300, "n_total": 300},
+    {"Q0口径": "主口径p*加权", "g": "幂函数型", "point": 19.529, "p05": 19.503, "p95": 19.56, "n_found": 300, "n_total": 300},
+    {"Q0口径": "主口径p*加权", "g": "对数型", "point": 18.579, "p05": 18.539, "p95": 18.62, "n_found": 300, "n_total": 300},
+    {"Q0口径": "副口径网页pile_cc", "g": "指数型", "point": 19.132, "p05": 19.109, "p95": 19.158, "n_found": 300, "n_total": 300},
+    {"Q0口径": "副口径网页pile_cc", "g": "幂函数型", "point": 19.585, "p05": 19.558, "p95": 19.616, "n_found": 300, "n_total": 300},
+    {"Q0口径": "副口径网页pile_cc", "g": "对数型", "point": 18.586, "p05": 18.546, "p95": 18.627, "n_found": 300, "n_total": 300}
   ],
-  "pstar_bootstrap": [
-    {
-      "g": "指数型",
-      "Q0_point": 0.662,
-      "Q0_p05": 0.661,
-      "Q0_p95": 0.664,
-      "C_crit_p05": 19.053,
-      "C_crit_p50": 19.059,
-      "C_crit_p95": 19.065,
-      "n_found": 200,
-      "n_total": 200
-    },
-    {
-      "g": "幂函数型",
-      "Q0_point": 0.662,
-      "Q0_p05": 0.661,
-      "Q0_p95": 0.664,
-      "C_crit_p05": 19.524,
-      "C_crit_p50": 19.529,
-      "C_crit_p95": 19.534,
-      "n_found": 200,
-      "n_total": 200
-    },
-    {
-      "g": "对数型",
-      "Q0_point": 0.662,
-      "Q0_p05": 0.661,
-      "Q0_p95": 0.664,
-      "C_crit_p05": 18.579,
-      "C_crit_p50": 18.579,
-      "C_crit_p95": 18.58,
-      "n_found": 200,
-      "n_total": 200
+  "bootstrap_with_P1_Q3_9": {
+    "description": "包含 P1 域质量和配比不确定性 + P2 参数不确定性的临界预算区间",
+    "n_bootstrap": 300, "L_ctx": 2048, "Q0_caliber": "主口径p*加权",
+    "summary": {
+      "指数型": {
+        "leave_Q0": {"mean": 19.06017783763483, "std": 0.01867047215572837, "p05": 19.0312004344064, "p50": 19.06002694396875, "p95": 19.09121739549114, "n_valid": 300},
+        "reach_Q1": {"mean": 20.357745750167823, "std": 0.040377725632250346, "p05": 20.291895652046833, "p50": 20.357250972666407, "p95": 20.42774375345557, "n_valid": 300},
+        "Q0_bootstrap": {"mean": 0.6623743926144205, "std": 0.0020257567986917387, "p05": 0.6590368002498636, "p95": 0.66552675376632}
+      },
+      "幂函数型": {
+        "leave_Q0": {"mean": 19.53055142331371, "std": 0.019171900390152354, "p05": 19.500703998576, "p50": 19.531021013617647, "p95": 19.563115162770465, "n_valid": 300},
+        "reach_Q1": {"mean": 20.108260614800415, "std": 0.041774192044578974, "p05": 20.03942070790986, "p50": 20.10881598067317, "p95": 20.17924771041671, "n_valid": 300},
+        "Q0_bootstrap": {"mean": 0.6623743926144205, "std": 0.0020257567986917387, "p05": 0.6590368002498636, "p95": 0.66552675376632}
+      },
+      "对数型": {
+        "leave_Q0": {"mean": 18.57919301787596, "std": 0.024623171973592553, "p05": 18.540234995182708, "p50": 18.577732247967106, "p95": 18.620549178932286, "n_valid": 300},
+        "reach_Q1": {"mean": 18.57919301787596, "std": 0.024623171973592553, "p05": 18.540234995182708, "p50": 18.577732247967106, "p95": 18.620549178932286, "n_valid": 300},
+        "Q0_bootstrap": {"mean": 0.6623743926144205, "std": 0.0020257567986917387, "p05": 0.6590368002498636, "p95": 0.66552675376632}
+      }
     }
-  ]
+  }
 }

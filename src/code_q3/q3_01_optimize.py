@@ -13,7 +13,8 @@ import pandas as pd
 from q3_00_model import (PAR, PAR_M1, PAR_NOFLOOR, PAR_HTOT, ETA, LCTX_CRIT, Q0_MAIN, Q0_WEB,
                          H_TOT_SCALE, G_FUNCS, G_LIST, LCTX_C7, REGIME_NAME,
                          TAB, FIG, IFACE, loss, solve, N_star_closed, phi_ratio,
-                         profile_loss, write_manifest, setup_cjk_matplotlib)
+                         profile_loss, write_manifest, setup_cjk_matplotlib,
+                         FIT_SUPPORT, extrapolation_flag)
 
 STATE = {0: "LOWER", 1: "INTERIOR", 2: "UPPER"}
 
@@ -42,6 +43,7 @@ def run_grid():
                         share_Q=r["s_Q"][i], share_denominator="实际总消耗",
                         state=STATE[int(r["regime"][i])],
                         regime=REGIME_NAME[int(r["regime"][i])],
+                        extrapolation=str(extrapolation_flag(r["N"][i], r["D"][i])),
                         at_bound=bool(r["at_bound"][i])))
     return pd.DataFrame(rows)
 
@@ -59,7 +61,10 @@ def brute_force(C, g, Lc, Q0, nN_per_dec=40, nQ=100):
 
 
 def run_scan():
-    """细扫描：log10C ∈ [17, 26] 181 点，供结构性转移分析与作图"""
+    """细扫描：log10C ∈ [17, 26] 181 点，供结构性转移分析与作图。
+    Q3-10 诊断：逐预算计算配置比对数斜率 d ln(D*/N*)/d ln C 及其相对
+    "固定质量无提质开销"基准 (α-β)/(α+β) 的偏差 δ，δ 的极值点即口径C的转移。"""
+    slope0 = (PAR["al"] - PAR["be"]) / (PAR["al"] + PAR["be"])
     Cs = 10.0 ** np.linspace(17, 26, 181)
     out = []
     for q0name, Q0 in Q0S.items():
@@ -69,6 +74,15 @@ def run_scan():
                 df = pd.DataFrame({k: v for k, v in r.items()})
                 df["log10C"] = np.log10(df.pop("C"))
                 df["Q0口径"] = q0name; df["g"] = g; df["L_ctx"] = Lc
+                # Q3-10：配置比对数斜率诊断（以 ln C 为自变量，数值梯度）
+                lnC = df["log10C"].values * np.log(10)
+                lnDN = np.log(df["DN"].values)
+                dlnDN_dlnC = np.gradient(lnDN, lnC)
+                df["dlnDN_dlnC"] = dlnDN_dlnC
+                df["DN_slope_baseline"] = slope0
+                df["DN_slope_dev"] = dlnDN_dlnC - slope0
+                # 高预算外推标注：按 N*、D* 相对数据支撑范围分级
+                df["extrapolation"] = extrapolation_flag(df["N"].values, df["D"].values)
                 out.append(df)
     return pd.concat(out, ignore_index=True)
 
@@ -197,6 +211,67 @@ if __name__ == "__main__":
     S.to_pickle(f"{TAB}/T1_scan.pkl")
     S.to_csv(f"{TAB}/T1_scan.csv", index=False, encoding="utf-8-sig")
 
+    # ---------------- Q3-10：配置比斜率诊断接口 ----------------
+    # 逐预算输出 d ln(D*/N*)/d ln C 及相对固定质量基准 (α-β)/(α+β) 的偏差，
+    # 供问题四与论文直接读取；同时给出各 (口径,g) 的偏差极值点（=口径C的转移预算）。
+    slope0 = (PAR["al"] - PAR["be"]) / (PAR["al"] + PAR["be"])
+    diag_cols = ["Q0口径", "g", "L_ctx", "log10C", "N", "D", "DN",
+                 "dlnDN_dlnC", "DN_slope_baseline", "DN_slope_dev", "regime"]
+    diag = S[S.L_ctx == 2048][diag_cols].copy()
+    diag.to_csv(f"{IFACE}/P3_dn_slope_diagnostic.csv", index=False, encoding="utf-8-sig")
+    # 偏差极值点汇总
+    kink_rows = []
+    for (q0name, g), sub in diag.groupby(["Q0口径", "g"]):
+        sub = sub.sort_values("log10C")
+        iC = int(np.argmax(np.abs(sub["DN_slope_dev"].values)))
+        kink_rows.append(dict(Q0口径=q0name, g=g, L_ctx=2048,
+                              DN_kink_log10C=float(sub["log10C"].values[iC]),
+                              max_abs_dev=float(np.abs(sub["DN_slope_dev"].values[iC])),
+                              slope_at_kink=float(sub["dlnDN_dlnC"].values[iC]),
+                              slope_baseline=slope0))
+    pd.DataFrame(kink_rows).to_csv(f"{IFACE}/P3_dn_slope_kink.csv",
+                                   index=False, encoding="utf-8-sig")
+    print("Q3-10 配置比斜率诊断：基准 (α-β)/(α+β) = %.4f" % slope0)
+    print(pd.DataFrame(kink_rows).round(4).to_string(index=False))
+
+    # ---------------- 高预算外推警告接口 ----------------
+    # 结论可靠性分级：临界预算/转移是否落在 B6/B7 拟合域内决定其可信度。
+    # 网格最优解与临界预算分别标注，供论文与问题四读取。
+    import json as _json
+    # ① 网格最优解按外推等级统计
+    grid_extrap = (T.groupby(["Q0口径", "g", "extrapolation"]).size()
+                   .rename("n").reset_index())
+    grid_extrap.to_csv(f"{IFACE}/P3_extrapolation_by_config.csv",
+                       index=False, encoding="utf-8-sig")
+    # ② 逐预算：哪些 log10C 起进入 IN_OBS / EXTRAP（主口径，L=2048）
+    main_scan = S[(S.L_ctx == 2048) & (S.Q0口径 == "主口径p*加权")]
+    onset = {}
+    for g in G_LIST:
+        sg = main_scan[main_scan.g == g].sort_values("log10C")
+        for lvl in ("IN_OBS", "EXTRAP"):
+            hit = sg[sg.extrapolation == lvl]
+            onset[f"{g}|{lvl}_onset_log10C"] = (
+                float(hit.log10C.min()) if len(hit) else None)
+    # ③ 临界预算是否在拟合域内（读 leave_Q0 / reach_Q1 与拟合预算上界比）
+    warn = {
+        "fit_support": FIT_SUPPORT,
+        "message": (
+            "标度律拟合于 B6（log10C∈[18.62,22.63]，N≤1.2e10，D≤6e11），B7 同域留出；"
+            "B8 将观测扩展至 log10C≈24.92。临界预算(leave_Q0/reach_Q1)均落在拟合域内，"
+            "故结构性转移结论非外推；但 log10C≥23 的最优规模配置 N*/D* 超出拟合域，"
+            "属外推，须谨慎解读。"),
+        "critical_budget_in_fit_range": True,
+        "extrapolation_onset_main_L2048": onset,
+        "grid_extrapolation_counts": grid_extrap.to_dict("records"),
+    }
+    with open(f"{IFACE}/P3_extrapolation_warning.json", "w", encoding="utf-8") as f:
+        _json.dump(warn, f, ensure_ascii=False, indent=2)
+    print("\n高预算外推警告：拟合域 log10C∈[18.62,22.63]；外推起点(主口径,L=2048)：")
+    for k, v in onset.items():
+        print(f"  {k}: {v}")
+    print("网格最优解外推分级计数：")
+    print(grid_extrap.to_string(index=False))
+
     # ================= 作图 =================
     plt = setup_cjk_matplotlib()
     col = {"指数型": "#d7301f", "幂函数型": "#2b8cbe", "对数型": "#31a354"}
@@ -276,11 +351,13 @@ if __name__ == "__main__":
         for j in range(M.shape[1]):
             axes[1].text(j, i, f"{M.values[i, j]:.3f}", ha="center", va="center", fontsize=7,
                          color="w" if M.values[i, j] > 2.4 else "k")
-    axes[1].axhline(2.5, color="purple", ls="-.", lw=1)   # 8192 与 32768 之间 = 临界值所在
+    axes[1].axhline(2.5, color="purple", ls="-.", lw=1)
     axes[1].set_xlabel("预算 C"); axes[1].set_ylabel("L_ctx（C7 可行值）")
     axes[1].set_title("最优 Loss 热图（对数型，主口径；紫线=L_crit）")
     fig.colorbar(im, ax=axes[1], shrink=.8)
     fig.suptitle("图4  上下文长度敏感性")
     fig.tight_layout(); fig.savefig(f"{FIG}/F4_Lctx_sensitivity.png"); plt.close(fig)
-    write_manifest(["P3_optimal_config.csv"])
+    write_manifest(["P3_optimal_config.csv", "P3_dn_slope_diagnostic.csv",
+                    "P3_dn_slope_kink.csv", "P3_extrapolation_by_config.csv",
+                    "P3_extrapolation_warning.json"])
     print("done")

@@ -9,7 +9,7 @@ q3_00_model.py — 问题三公共模型：广义标度律 + 三项成本 + 向�
 
 降维：三项成本都含 D，且 L 对 D 严格递减，约束取等
     D(N,Q) = C / [K N + Δg(Q)] ,   K = 6 + η L_ctx ,  Δg = g(Q) - g(Q0)
-Q<Q0 不省钱却抬高 Loss，可行域取 Q∈[Q0,1]（建模假设）。
+Q<Q0 不省錢却抬高 Loss，可行域取 Q∈[Q0,1]（建模假设）。
 内层对 log N 黄金分割；外层对 Q 做三级网格加密，并与两端点比较。
 """
 import os, sys, json, csv, hashlib
@@ -55,6 +55,30 @@ if len(_web) != 1:
     raise ValueError("P1 领域质量中必须恰有一个 pile_cc")
 Q0_WEB = float(_web[0]["Q_final"])
 
+# ---------------- 数据支撑范围（外推警告用；来自附件 B 实测） ----------------
+# 标度律主式拟合于 B6（supplementary_NQ_experiment.csv，360 点），B7 同域留出。
+# B8（supplementary_NQ_experiment_large.csv）把观测扩展到更大规模，作为"外推但仍有观测佐证"的边界。
+# 超过 B8 上界则为纯外推，Q3 高预算最优解据此标注。
+FIT_SUPPORT = {
+    "fit_train": "B6 supplementary_NQ_experiment.csv (360点)",
+    "N_max_fit": 1.2e10, "D_max_fit": 6.0e11,      # B6/B7 拟合域上界
+    "log10C_fit": [18.62, 22.63],                   # B6/B7 的 6ND 预算范围
+    "N_max_obs": 7.0e11, "D_max_obs": 2.0e12,      # B8 观测扩展上界
+    "log10C_obs": [18.32, 24.92],                   # B8 的 6ND 预算范围
+}
+
+
+def extrapolation_flag(N, D):
+    """按 N*、D* 相对数据支撑范围返回外推等级（向量化）：
+    IN_FIT   : N,D 均在 B6/B7 拟合域内（结论最可靠）
+    IN_OBS   : 超出拟合域但仍在 B8 观测范围内（外推，有观测佐证）
+    EXTRAP   : 超出 B8 观测范围（纯外推，须谨慎）"""
+    N = np.asarray(N, float); D = np.asarray(D, float)
+    in_fit = (N <= FIT_SUPPORT["N_max_fit"]) & (D <= FIT_SUPPORT["D_max_fit"])
+    in_obs = (N <= FIT_SUPPORT["N_max_obs"]) & (D <= FIT_SUPPORT["D_max_obs"])
+    return np.where(in_fit, "IN_FIT", np.where(in_obs, "IN_OBS", "EXTRAP"))
+
+
 # ---------------- 三种质量成本函数（附录 B）：(g, g') ----------------
 G_FUNCS = {
     "指数型": (lambda Q: 1e7 * np.exp(6.0 * Q),
@@ -93,7 +117,7 @@ def loss(N, D, Q, p=PAR):
 
 
 def N_star_closed(C, Q, kappa, p=PAR):
-    """固定 Q 且 Δg=0 时的闭式 N*。m 与地板对固定 Q 的规模导数抵消。"""
+    """固定 Q 且 Δg=0 时的闭式 N*。m 与地板对固定 Q 的规模导数抗消。"""
     al, be = p["al"], p["be"]
     return ((al * p["A"] * hN(Q, p) / (be * p["B"] * hD(Q, p))) ** (1 / (al + be))
             * (C / kappa) ** (be / (al + be)))

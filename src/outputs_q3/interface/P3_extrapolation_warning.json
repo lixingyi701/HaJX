@@ -1,0 +1,41 @@
+{
+  "fit_support": {
+    "fit_train": "B6 supplementary_NQ_experiment.csv (360点)",
+    "N_max_fit": 12000000000.0,
+    "D_max_fit": 600000000000.0,
+    "log10C_fit": [18.62, 22.63],
+    "N_max_obs": 700000000000.0,
+    "D_max_obs": 2000000000000.0,
+    "log10C_obs": [18.32, 24.92]
+  },
+  "message": "标度律拟合于 B6（log10C∈[18.62,22.63]，N≤1.2e10，D≤6e11），B7 同域留出；B8 将观测扩展至 log10C≈24.92。临界预算(leave_Q0/reach_Q1)均落在拟合域内，故结构性转移结论非外推；但 log10C≥23 的最优规模配置 N*/D* 超出拟合域，属外推，须谨慎解读。",
+  "critical_budget_in_fit_range": true,
+  "extrapolation_onset_main_L2048": {
+    "指数型|IN_OBS_onset_log10C": 22.65,
+    "指数型|EXTRAP_onset_log10C": 23.55,
+    "幂函数型|IN_OBS_onset_log10C": 22.65,
+    "幂函数型|EXTRAP_onset_log10C": 23.55,
+    "对数型|IN_OBS_onset_log10C": 22.55,
+    "对数型|EXTRAP_onset_log10C": 23.5
+  },
+  "grid_extrapolation_counts": [
+    {"Q0口径": "主口径p*加权", "g": "对数型", "extrapolation": "EXTRAP", "n": 9},
+    {"Q0口径": "主口径p*加权", "g": "对数型", "extrapolation": "IN_FIT", "n": 21},
+    {"Q0口径": "主口径p*加权", "g": "对数型", "extrapolation": "IN_OBS", "n": 5},
+    {"Q0口径": "主口径p*加权", "g": "幂函数型", "extrapolation": "EXTRAP", "n": 9},
+    {"Q0口径": "主口径p*加权", "g": "幂函数型", "extrapolation": "IN_FIT", "n": 21},
+    {"Q0口径": "主口径p*加权", "g": "幂函数型", "extrapolation": "IN_OBS", "n": 5},
+    {"Q0口径": "主口径p*加权", "g": "指数型", "extrapolation": "EXTRAP", "n": 9},
+    {"Q0口径": "主口径p*加权", "g": "指数型", "extrapolation": "IN_FIT", "n": 21},
+    {"Q0口径": "主口径p*加权", "g": "指数型", "extrapolation": "IN_OBS", "n": 5},
+    {"Q0口径": "副口径网页pile_cc", "g": "对数型", "extrapolation": "EXTRAP", "n": 9},
+    {"Q0口径": "副口径网页pile_cc", "g": "对数型", "extrapolation": "IN_FIT", "n": 21},
+    {"Q0口径": "副口径网页pile_cc", "g": "对数型", "extrapolation": "IN_OBS", "n": 5},
+    {"Q0口径": "副口径网页pile_cc", "g": "幂函数型", "extrapolation": "EXTRAP", "n": 9},
+    {"Q0口径": "副口径网页pile_cc", "g": "幂函数型", "extrapolation": "IN_FIT", "n": 21},
+    {"Q0口径": "副口径网页pile_cc", "g": "幂函数型", "extrapolation": "IN_OBS", "n": 5},
+    {"Q0口径": "副口径网页pile_cc", "g": "指数型", "extrapolation": "EXTRAP", "n": 9},
+    {"Q0口径": "副口径网页pile_cc", "g": "指数型", "extrapolation": "IN_FIT", "n": 21},
+    {"Q0口径": "副口径网页pile_cc", "g": "指数型", "extrapolation": "IN_OBS", "n": 5}
+  ]
+}

@@ -2,18 +2,18 @@
 """
 q3_02_transition.py — 问题三·Step5/7：结构性转移的定义、识别与敏感性
 
-【定义】记 x*(C) = (N*,D*,Q*) 为预算 C 下的最优解，称 C_crit 处发生结构性转移，若：
+[定义]记 x*(C) = (N*,D*,Q*) 为预算 C 下的最优解，称 C_crit 处发生结构性转移，若：
   口径 A（KKT 活跃约束集切换，主定义）：
-      𝒜(C) = { Q≥Q0 活跃 | 无约束活跃(内点) | Q≤1 活跃 } 在 C_crit 两侧不同。
+      𝓜(C) = { Q≥Q0 活跃 | 无约束活跃(内点) | Q≤1 活跃 } 在 C_crit 两侧不同。
       局部识别：在固定质量并优化规模后，Φ(C;Q)=1。Φ 用幂次损失
       （含 m*、地板和 Q^{-κ}）计算，只表示贴着该质量再抬一点是否打平。
       全局切换以最优解的质量状态变化为准，二者分开记录。
   口径 B（份额弹性符号翻转）：e_Q(C) = d ln s_Q / d ln C 由正变负（s_Q 取极大）。
   口径 C（配置比斜率拐点）：固定 Q 时 D*/N* ∝ C^{(α-β)/(α+β)}（常斜率 0.0968）；
-      偏差 δ(C) = d ln(D/N)/d ln C − (α−β)/(α+β) 取极值处即转移。
-【识别方法】细扫描 + 二分法（精度 1e-3 dex）；三口径 C_crit 相差 < 0.5 dex 视为一致。
-【敏感性】L_ctx 五档、Q0 相图、η ±50%、问题二 bootstrap (E,A,B,κ_N,κ_D,k0)。
-产出：tables/T2_*.csv, interface/P3_structural_transition.json, P3_sensitivity_Lctx.csv, F5-F7
+      偏差 δ(C) = d ln(D/N)/d ln C − (α−β)/(α+β) 取极値处即转移。
+[识别方法]细扫描 + 二分法（精度 1e-3 dex）；三口径 C_crit 相差 < 0.5 dex 视为一致。
+[敏感性]L_ctx 五档、Q0 相图、η ±50%、问题二 bootstrap (E,A,B,κ_N,κ_D,k0)。
+产出：tablesT2_*.csv, interface/P3_structural_transition.json, P3_sensitivity_Lctx.csv, F5-F7
 """
 import json
 import numpy as np
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     T.to_csv(f"{TAB}/T2_ccrit_three_criteria.csv", index=False, encoding="utf-8-sig")
     pd.set_option("display.width", 250)
     print(T[T.L_ctx == 2048].round(3).to_string(index=False))
-    print("Φ 解析根 vs 数值二分 最大偏差 %.4f dex" % (T.A_phi_analytic - T.A_leave_Q0).abs().max())
+    print("Φ 解析根 vs 数値二分 最大偏差 %.4f dex" % (T.A_phi_analytic - T.A_leave_Q0).abs().max())
     print("三口径最大分歧 %.3f dex" % T.spread_ABC_dex.max())
 
     # ============ 2. KKT Φ 曲线（验证：Φ 穿 1 处即 Q* 离开 Q0） ============
@@ -134,38 +134,6 @@ if __name__ == "__main__":
     BS.to_csv(f"{TAB}/T2_bootstrap_ccrit.csv", index=False, encoding="utf-8-sig")
     print(BS.round(3).to_string(index=False))
 
-    # ============ 5b. P1 配比重抽样不确定性 → 临界预算（Q3-9） ============
-    # 读取 P1 逐次重抽样接口（q1_07 导出的 200 次重选 p*），把 Q0(p*)=Σp_i Q_i 的重抽样
-    # 不确定性传播到离开下界的临界预算。本项只含配比重抽样（P2 参数取点估计），
-    # 与上方 P2 联合 bootstrap 分开报告（不同来源，不合并）。
-    try:
-        pstar_boot = pd.read_csv(f"{ROOT}/outputs_q1/interface/P1_pstar_bootstrap.csv")
-        qdom = pd.read_csv(f"{ROOT}/outputs_q1/interface/P1_Q_domain.csv", encoding="utf-8-sig")
-        qmap = dict(zip(qdom["mixture_domain"], qdom["Q_final"]))
-        dom_cols = list(pstar_boot.columns)
-        Qvec = np.array([float(qmap[d]) for d in dom_cols])
-        Q0_boot = pstar_boot.values @ Qvec
-        print(f"P1 配比重抽样：Q0(p*) 均值 {Q0_boot.mean():.6f}，5–95% "
-              f"[{np.percentile(Q0_boot, 5):.6f}, {np.percentile(Q0_boot, 95):.6f}]；"
-              f"点估计 Q0_MAIN={Q0_MAIN:.6f}")
-        rows_p = []
-        for g in G_LIST:
-            cc = c_crit(g, 2048, Q0_boot, which="leave")
-            valid = cc[np.isfinite(cc)]
-            rows_p.append(dict(g=g, Q0_point=Q0_MAIN,
-                               Q0_p05=float(np.percentile(Q0_boot, 5)),
-                               Q0_p95=float(np.percentile(Q0_boot, 95)),
-                               C_crit_p05=float(np.percentile(valid, 5)) if len(valid) else np.nan,
-                               C_crit_p50=float(np.percentile(valid, 50)) if len(valid) else np.nan,
-                               C_crit_p95=float(np.percentile(valid, 95)) if len(valid) else np.nan,
-                               n_found=int(len(valid)), n_total=int(len(cc))))
-        PS = pd.DataFrame(rows_p)
-        PS.to_csv(f"{TAB}/T2_pstar_bootstrap_ccrit.csv", index=False, encoding="utf-8-sig")
-        print(PS.round(3).to_string(index=False))
-    except FileNotFoundError:
-        PS = None
-        print("P1_pstar_bootstrap.csv 不存在，跳过配比重抽样传播（待 q1_07 刷新缓存后重跑）")
-
     # ============ 6. L_ctx 敏感性表（接口） ============
     OPT = pd.read_csv(f"{IFACE}/P3_optimal_config.csv")
     base = OPT[OPT.L_ctx == 2048].set_index(["Q0口径", "g", "log10C"])
@@ -180,7 +148,7 @@ if __name__ == "__main__":
     sens = sens.merge(T[["Q0口径", "g", "L_ctx", "A_leave_Q0", "A_reach_Q1"]],
                       on=["Q0口径", "g", "L_ctx"])
     sens.to_csv(f"{IFACE}/P3_sensitivity_Lctx.csv", index=False, encoding="utf-8-sig")
-    print("N* 比值 数值 vs 解析 最大相对差（仅无提质开销组）:",
+    print("N* 比値 数値 vs 解析 最大相对差（仅无提质开销组）:",
           (sens.loc[sens.share_Q < 1e-9, "N_ratio_vs2048"] /
            sens.loc[sens.share_Q < 1e-9, "N_ratio_analytic"] - 1).abs().max())
 
@@ -209,9 +177,9 @@ if __name__ == "__main__":
     def finite_or_none(x):
         return round(float(x), 3) if np.isfinite(x) else None
     J = dict(definition=dict(
-        A="全局最优的质量状态在 LOWER/INTERIOR/UPPER 之间切换。phi_analytic 是局部 Φ=1 的根，leave_Q0 是数值最优解真正离开下界的预算，二者不必相同。",
+        A="全局最优的质量状态在 LOWER/INTERIOR/UPPER 之间切换。phi_analytic 是局部 Φ=1 的根，leave_Q0 是数値最优解真正离开下界的预算，二者不必相同。",
         B="提质份额弹性 d ln s_Q / d ln C 由正转负（s_Q 极大）",
-        C="配置比斜率 d ln(D*/N*)/d ln C 偏离固定质量基准 (α-β)/(α+β)=%.4f 的极值点" % SLOPE0),
+        C="配置比斜率 d ln(D*/N*)/d ln C 偏离固定质量基准 (α-β)/(α+β)=%.4f 的极値点" % SLOPE0),
         L_ctx_crit=LCTX_CRIT,
         C_crit_Lctx2048={f"{r.Q0口径}|{r.g}": dict(leave_Q0=finite_or_none(r.A_leave_Q0),
                                                      leave_status=r.A_leave_status,
@@ -225,14 +193,9 @@ if __name__ == "__main__":
         bootstrap=[{k: (finite_or_none(v) if isinstance(v, (float, np.floating)) else v)
                     for k, v in row.items()}
                    for row in BS[["Q0口径", "g", "point", "p05", "p95", "n_found", "n_total"]]
-                   .to_dict("records")],
-        pstar_bootstrap=([{k: (finite_or_none(v) if isinstance(v, (float, np.floating)) else v)
-                           for k, v in row.items()}
-                          for row in PS[["g", "Q0_point", "Q0_p05", "Q0_p95", "C_crit_p05",
-                                         "C_crit_p50", "C_crit_p95", "n_found", "n_total"]]
-                          .to_dict("records")] if PS is not None else None))
-    json.dump(J, open(f"{IFACE}/P3_structural_transition.json", "w"), ensure_ascii=False, indent=2,
-              allow_nan=False)
+                   .to_dict("records")])
+    json.dump(J, open(f"{IFACE}/P3_structural_transition.json", "w", encoding="utf-8"),
+              ensure_ascii=False, indent=2, allow_nan=False)
 
     # ================= 作图 =================
     plt = setup_cjk_matplotlib()
@@ -244,7 +207,7 @@ if __name__ == "__main__":
         axes[0].plot(np.log10(Cs), phi[g], color=col[g], label=f"{g} Φ(Q=Q₀)")
         axes[0].plot(np.log10(Cs), phi1[g], color=col[g], ls="--", lw=1, label=f"{g} Φ(Q=1)")
     axes[0].axhline(1, color="k", lw=1); axes[0].set_yscale("log")
-    axes[0].set_xlabel("log₁₀ C"); axes[0].set_ylabel("Φ = 提质边际收益 / 挤占数据损失")
+    axes[0].set_xlabel("log₁₀ C"); axes[0].set_ylabel("Φ = 提质边際收益 / 挤占数据损失")
     axes[0].set_title("口径A：KKT 判据 Φ 穿越 1"); axes[0].legend(fontsize=7, ncol=2)
     for g in G_LIST:
         s = S[(S.g == g) & (S.L_ctx == 2048) & (S.Q0口径 == "副口径网页pile_cc")].sort_values("log10C")
