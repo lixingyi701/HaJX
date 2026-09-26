@@ -1,0 +1,3 @@
+﻿mapping,Q0_at_pstar,status,note,domain,Q_B
+pstar_anchor,1.0,NO_QUALITY_RANGE,锚点映射在 p* 上把 Q0 抬到 1，没有可提升区间,,
+pstar_anchor,,OUT_OF_SUPPORT,pile_cc 映射后超过 1，按 clip_policy=error 记录，不截断、不优化,pile_cc,1.0207170820242377

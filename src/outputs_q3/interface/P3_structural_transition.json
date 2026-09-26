@@ -1,943 +1,119 @@
 {
   "definition": {
-    "state": "å…¨å±€æœ€ä¼˜çš„è´¨é‡çº¦æŸçŠ¶æ€ï¼šLOWER / INTERIOR / UPPERã€‚è¿ç»­ç¦»å¼€ Q0 æˆ–åˆ°è¾¾ 1 å„è®¡ä¸€æ¬¡ã€‚",
-    "phi": "Î¦=1 åªæ˜¯å›ºå®š Q çš„å±€éƒ¨ä¸€é˜¶å¿…è¦æ¡ä»¶ï¼Œä¸æ˜¯å…¨å±€åˆ‡æ¢çš„å……åˆ†æ¡ä»¶ã€‚",
-    "auxiliary_B": "æè´¨ä»½é¢å³°å€¼ï¼Œä¸ä¸å…¨å±€ä¸´ç•Œç‚¹æ··ç§°åŒä¸€äº‹ä»¶ã€‚",
-    "auxiliary_C": "d ln(D*/N*)/d ln C ç›¸å¯¹æ— æè´¨æ–œç‡ 0.0968 çš„åç¦»æå€¼ï¼Œä¸ä¸å…¨å±€ä¸´ç•Œç‚¹æ··ç§°åŒä¸€äº‹ä»¶ã€‚"
+    "A": "È«¾Ö×îÓÅµÄÖÊÁ¿×´Ì¬ÔÚ LOWER/INTERIOR/UPPER Ö®¼äÇĞ»»¡£phi_analytic ÊÇ¾Ö²¿ ¦µ=1 µÄ¸ù£¬leave_Q0 ÊÇÊıÖµ×îÓÅ½âÕæÕıÀë¿ªÏÂ½çµÄÔ¤Ëã£¬¶şÕß²»±ØÏàÍ¬¡£",
+    "B": "ÌáÖÊ·İ¶îµ¯ĞÔ d ln s_Q / d ln C ÓÉÕı×ª¸º£¨s_Q ¼«´ó£©",
+    "C": "ÅäÖÃ±ÈĞ±ÂÊ d ln(D*/N*)/d ln C Æ«Àë¹Ì¶¨ÖÊÁ¿»ù×¼ (¦Á-¦Â)/(¦Á+¦Â)=0.0968 µÄ¼«Öµµã"
   },
-  "analysis_interval_log10C": [
-    17,
-    26
-  ],
-  "class_tol": 0.0001,
-  "tie_atol": 1e-08,
   "L_ctx_crit": 30000.0,
-  "scenarios": {
-    "ä¸»å£å¾„p*åŠ æƒ|æŒ‡æ•°å‹|L2048": {
-      "leave_Q0": 19.059293,
+  "C_crit_Lctx2048": {
+    "Ö÷¿Ú¾¶p*¼ÓÈ¨|Ö¸ÊıĞÍ": {
+      "leave_Q0": 19.059,
       "leave_status": "FOUND",
-      "reach_Q1": 20.35543,
+      "reach_Q1": 20.355,
       "full_status": "FOUND",
-      "phi_local_root": 19.058962,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.05,
-          "log10C_right": 19.1,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 0.6752189253327905,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.35,
-          "log10C_right": 20.4,
-          "Q_left": 0.9985441503181941,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
+      "phi_analytic": 19.059,
+      "sQ_peak": 20.35,
+      "DN_kink": 19.1
     },
-    "ä¸»å£å¾„p*åŠ æƒ|æŒ‡æ•°å‹|L4096": {
-      "leave_Q0": 19.037317,
+    "Ö÷¿Ú¾¶p*¼ÓÈ¨|Ãİº¯ÊıĞÍ": {
+      "leave_Q0": 19.529,
       "leave_status": "FOUND",
-      "reach_Q1": 20.340331,
+      "reach_Q1": 20.106,
       "full_status": "FOUND",
-      "phi_local_root": 19.036982,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.0,
-          "log10C_right": 19.05,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 0.6664943768773308,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.3,
-          "log10C_right": 20.35,
-          "Q_left": 0.9898934493103622,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
+      "phi_analytic": 19.529,
+      "sQ_peak": 20.1,
+      "DN_kink": 19.6
     },
-    "ä¸»å£å¾„p*åŠ æƒ|æŒ‡æ•°å‹|L8192": {
-      "leave_Q0": 18.996929,
+    "Ö÷¿Ú¾¶p*¼ÓÈ¨|¶ÔÊıĞÍ": {
+      "leave_Q0": 18.579,
       "leave_status": "FOUND",
-      "reach_Q1": 20.312471,
+      "reach_Q1": 18.579,
       "full_status": "FOUND",
-      "phi_local_root": 18.996588,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.95,
-          "log10C_right": 19.0,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 0.6634666315245896,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.3,
-          "log10C_right": 20.35,
-          "Q_left": 0.9968245597520032,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
+      "phi_analytic": 18.904,
+      "sQ_peak": 18.6,
+      "DN_kink": 18.55
     },
-    "ä¸»å£å¾„p*åŠ æƒ|æŒ‡æ•°å‹|L32768": {
-      "leave_Q0": 18.817841,
+    "¸±¿Ú¾¶ÍøÒ³pile_cc|Ö¸ÊıĞÍ": {
+      "leave_Q0": 19.132,
       "leave_status": "FOUND",
-      "reach_Q1": 20.187315,
+      "reach_Q1": 20.36,
       "full_status": "FOUND",
-      "phi_local_root": 18.817472,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.8,
-          "log10C_right": 18.85,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 0.6715898507636514,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.15,
-          "log10C_right": 20.2,
-          "Q_left": 0.9909273135771519,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
+      "phi_analytic": 19.132,
+      "sQ_peak": 20.35,
+      "DN_kink": 19.2
     },
-    "ä¸»å£å¾„p*åŠ æƒ|æŒ‡æ•°å‹|L131072": {
-      "leave_Q0": 18.467611,
+    "¸±¿Ú¾¶ÍøÒ³pile_cc|Ãİº¯ÊıĞÍ": {
+      "leave_Q0": 19.585,
       "leave_status": "FOUND",
-      "reach_Q1": 19.93586,
+      "reach_Q1": 20.115,
       "full_status": "FOUND",
-      "phi_local_root": 18.467193,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.45,
-          "log10C_right": 18.5,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 0.6706403835798649,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 19.9,
-          "log10C_right": 19.95,
-          "Q_left": 0.9916657880534302,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
+      "phi_analytic": 19.585,
+      "sQ_peak": 20.15,
+      "DN_kink": 19.65
     },
-    "ä¸»å£å¾„p*åŠ æƒ|å¹‚å‡½æ•°å‹|L2048": {
-      "leave_Q0": 19.529159,
+    "¸±¿Ú¾¶ÍøÒ³pile_cc|¶ÔÊıĞÍ": {
+      "leave_Q0": 18.586,
       "leave_status": "FOUND",
-      "reach_Q1": 20.106341,
+      "reach_Q1": 18.586,
       "full_status": "FOUND",
-      "phi_local_root": 19.528987,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.5,
-          "log10C_right": 19.55,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 0.6750290318960332,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.1,
-          "log10C_right": 20.15,
-          "Q_left": 0.9956113516838316,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "ä¸»å£å¾„p*åŠ æƒ|å¹‚å‡½æ•°å‹|L4096": {
-      "leave_Q0": 19.507685,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.092089,
-      "full_status": "FOUND",
-      "phi_local_root": 19.507509,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.5,
-          "log10C_right": 19.55,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 0.6869923184117421,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.05,
-          "log10C_right": 20.1,
-          "Q_left": 0.9720645655259285,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "ä¸»å£å¾„p*åŠ æƒ|å¹‚å‡½æ•°å‹|L8192": {
-      "leave_Q0": 19.468228,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.065759,
-      "full_status": "FOUND",
-      "phi_local_root": 19.468045,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.45,
-          "log10C_right": 19.5,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 0.6803882466667388,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.05,
-          "log10C_right": 20.1,
-          "Q_left": 0.9895347617075985,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "ä¸»å£å¾„p*åŠ æƒ|å¹‚å‡½æ•°å‹|L32768": {
-      "leave_Q0": 19.293389,
-      "leave_status": "FOUND",
-      "reach_Q1": 19.946986,
-      "full_status": "FOUND",
-      "phi_local_root": 19.293176,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.25,
-          "log10C_right": 19.3,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 0.6657875513071787,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 19.9,
-          "log10C_right": 19.95,
-          "Q_left": 0.9714315874034041,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "ä¸»å£å¾„p*åŠ æƒ|å¹‚å‡½æ•°å‹|L131072": {
-      "leave_Q0": 18.951937,
-      "leave_status": "FOUND",
-      "reach_Q1": 19.706165,
-      "full_status": "FOUND",
-      "phi_local_root": 18.951674,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.95,
-          "log10C_right": 19.0,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 0.6817175007240398,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 19.7,
-          "log10C_right": 19.75,
-          "Q_left": 0.9965186203261165,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "ä¸»å£å¾„p*åŠ æƒ|å¯¹æ•°å‹|L2048": {
-      "leave_Q0": 18.579199,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.579199,
-      "full_status": "FOUND",
-      "phi_local_root": 18.903599,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.55,
-          "log10C_right": 18.6,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 18.55,
-          "log10C_right": 18.6,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "ä¸»å£å¾„p*åŠ æƒ|å¯¹æ•°å‹|L4096": {
-      "leave_Q0": 18.559996,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.559996,
-      "full_status": "FOUND",
-      "phi_local_root": 18.881445,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.55,
-          "log10C_right": 18.6,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 18.55,
-          "log10C_right": 18.6,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "ä¸»å£å¾„p*åŠ æƒ|å¯¹æ•°å‹|L8192": {
-      "leave_Q0": 18.524624,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.524624,
-      "full_status": "FOUND",
-      "phi_local_root": 18.840728,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.5,
-          "log10C_right": 18.55,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 18.5,
-          "log10C_right": 18.55,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "ä¸»å£å¾„p*åŠ æƒ|å¯¹æ•°å‹|L32768": {
-      "leave_Q0": 18.366579,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.366579,
-      "full_status": "FOUND",
-      "phi_local_root": 18.660147,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.35,
-          "log10C_right": 18.4,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 18.35,
-          "log10C_right": 18.4,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "ä¸»å£å¾„p*åŠ æƒ|å¯¹æ•°å‹|L131072": {
-      "leave_Q0": 18.052431,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.052431,
-      "full_status": "FOUND",
-      "phi_local_root": 18.306868,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.05,
-          "log10C_right": 18.1,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 18.05,
-          "log10C_right": 18.1,
-          "Q_left": 0.6624116679870492,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|æŒ‡æ•°å‹|L2048": {
-      "leave_Q0": 19.132418,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.359738,
-      "full_status": "FOUND",
-      "phi_local_root": 19.132107,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.1,
-          "log10C_right": 19.15,
-          "Q_left": 0.676134904846549,
-          "Q_right": 0.6819037518539699,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.35,
-          "log10C_right": 20.4,
-          "Q_left": 0.9974596831598901,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|æŒ‡æ•°å‹|L4096": {
-      "leave_Q0": 19.11059,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.344598,
-      "full_status": "FOUND",
-      "phi_local_root": 19.110276,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.1,
-          "log10C_right": 19.15,
-          "Q_left": 0.676134904846549,
-          "Q_right": 0.6886644357152981,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.3,
-          "log10C_right": 20.35,
-          "Q_left": 0.9887861710803116,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|æŒ‡æ•°å‹|L8192": {
-      "leave_Q0": 19.070477,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.316664,
-      "full_status": "FOUND",
-      "phi_local_root": 19.070156,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.05,
-          "log10C_right": 19.1,
-          "Q_left": 0.676134904846549,
-          "Q_right": 0.6854055431953167,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.3,
-          "log10C_right": 20.35,
-          "Q_left": 0.995769512194558,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|æŒ‡æ•°å‹|L32768": {
-      "leave_Q0": 18.892639,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.191195,
-      "full_status": "FOUND",
-      "phi_local_root": 18.892291,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.85,
-          "log10C_right": 18.9,
-          "Q_left": 0.676134904846549,
-          "Q_right": 0.6783715981599526,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.15,
-          "log10C_right": 20.2,
-          "Q_left": 0.989960182050243,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|æŒ‡æ•°å‹|L131072": {
-      "leave_Q0": 18.54498,
-      "leave_status": "FOUND",
-      "reach_Q1": 19.939205,
-      "full_status": "FOUND",
-      "phi_local_root": 18.544585,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.5,
-          "log10C_right": 18.55,
-          "Q_left": 0.676134904846549,
-          "Q_right": 0.6775214522851748,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 19.9,
-          "log10C_right": 19.95,
-          "Q_left": 0.9908710526303621,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|å¹‚å‡½æ•°å‹|L2048": {
-      "leave_Q0": 19.584704,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.114572,
-      "full_status": "FOUND",
-      "phi_local_root": 19.584551,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.55,
-          "log10C_right": 19.6,
-          "Q_left": 0.676134904846549,
-          "Q_right": 0.686174722796306,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.1,
-          "log10C_right": 20.15,
-          "Q_left": 0.9898792157764547,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|å¹‚å‡½æ•°å‹|L4096": {
-      "leave_Q0": 19.56335,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.100248,
-      "full_status": "FOUND",
-      "phi_local_root": 19.563193,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.55,
-          "log10C_right": 19.6,
-          "Q_left": 0.676134904846549,
-          "Q_right": 0.6990686018971028,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.1,
-          "log10C_right": 20.15,
-          "Q_left": 0.9997267388259643,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|å¹‚å‡½æ•°å‹|L8192": {
-      "leave_Q0": 19.524115,
-      "leave_status": "FOUND",
-      "reach_Q1": 20.073789,
-      "full_status": "FOUND",
-      "phi_local_root": 19.523951,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.5,
-          "log10C_right": 19.55,
-          "Q_left": 0.676134904846549,
-          "Q_right": 0.6918828450983856,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 20.05,
-          "log10C_right": 20.1,
-          "Q_left": 0.9840294024952455,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|å¹‚å‡½æ•°å‹|L32768": {
-      "leave_Q0": 19.350291,
-      "leave_status": "FOUND",
-      "reach_Q1": 19.954468,
-      "full_status": "FOUND",
-      "phi_local_root": 19.350099,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.35,
-          "log10C_right": 19.4,
-          "Q_left": 0.676134904846549,
-          "Q_right": 0.7019024214796955,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 19.95,
-          "log10C_right": 20.0,
-          "Q_left": 0.997105455712066,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|å¹‚å‡½æ•°å‹|L131072": {
-      "leave_Q0": 19.010955,
-      "leave_status": "FOUND",
-      "reach_Q1": 19.712695,
-      "full_status": "FOUND",
-      "phi_local_root": 19.010715,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 19.0,
-          "log10C_right": 19.05,
-          "Q_left": 0.676134904846549,
-          "Q_right": 0.692631783130928,
-          "smooth": true,
-          "coarse_step": false
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 19.7,
-          "log10C_right": 19.75,
-          "Q_left": 0.9928952094750711,
-          "Q_right": 1.0,
-          "smooth": true,
-          "coarse_step": false
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|å¯¹æ•°å‹|L2048": {
-      "leave_Q0": 18.585771,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.585771,
-      "full_status": "FOUND",
-      "phi_local_root": 18.898103,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.55,
-          "log10C_right": 18.6,
-          "Q_left": 0.676134904846549,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 18.55,
-          "log10C_right": 18.6,
-          "Q_left": 0.676134904846549,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|å¯¹æ•°å‹|L4096": {
-      "leave_Q0": 18.566532,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.566532,
-      "full_status": "FOUND",
-      "phi_local_root": 18.876013,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.55,
-          "log10C_right": 18.6,
-          "Q_left": 0.676134904846549,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 18.55,
-          "log10C_right": 18.6,
-          "Q_left": 0.676134904846549,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|å¯¹æ•°å‹|L8192": {
-      "leave_Q0": 18.531097,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.531097,
-      "full_status": "FOUND",
-      "phi_local_root": 18.835414,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.5,
-          "log10C_right": 18.55,
-          "Q_left": 0.676134904846549,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 18.5,
-          "log10C_right": 18.55,
-          "Q_left": 0.676134904846549,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|å¯¹æ•°å‹|L32768": {
-      "leave_Q0": 18.37281,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.37281,
-      "full_status": "FOUND",
-      "phi_local_root": 18.65537,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.35,
-          "log10C_right": 18.4,
-          "Q_left": 0.676134904846549,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 18.35,
-          "log10C_right": 18.4,
-          "Q_left": 0.676134904846549,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        }
-      ],
-      "phi_is_local_necessary_only": true
-    },
-    "å‰¯å£å¾„ç½‘é¡µpile_cc|å¯¹æ•°å‹|L131072": {
-      "leave_Q0": 18.058346,
-      "leave_status": "FOUND",
-      "reach_Q1": 18.058346,
-      "full_status": "FOUND",
-      "phi_local_root": 18.303189,
-      "scan_identification": "FOUND",
-      "scan_events": [
-        {
-          "kind": "LEAVE_Q0",
-          "log10C_left": 18.05,
-          "log10C_right": 18.1,
-          "Q_left": 0.676134904846549,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        },
-        {
-          "kind": "REACH_Q1",
-          "log10C_left": 18.05,
-          "log10C_right": 18.1,
-          "Q_left": 0.676134904846549,
-          "Q_right": 1.0,
-          "smooth": false,
-          "coarse_step": true
-        }
-      ],
-      "phi_is_local_necessary_only": true
+      "phi_analytic": 18.898,
+      "sQ_peak": 18.6,
+      "DN_kink": 18.55
     }
   },
-  "tied_set": [],
-  "max_spread_three_criteria_dex": 1.4824,
+  "max_spread_three_criteria_dex": 1.482,
   "bootstrap": [
     {
-      "Q0å£å¾„": "ä¸»å£å¾„p*åŠ æƒ",
-      "g": "æŒ‡æ•°å‹",
-      "point": 19.059293,
-      "p05": 19.03808,
-      "p95": 19.084216,
+      "Q0¿Ú¾¶": "Ö÷¿Ú¾¶p*¼ÓÈ¨",
+      "g": "Ö¸ÊıĞÍ",
+      "point": 19.059,
+      "p05": 19.038,
+      "p95": 19.084,
       "n_found": 300,
       "n_total": 300
     },
     {
-      "Q0å£å¾„": "ä¸»å£å¾„p*åŠ æƒ",
-      "g": "å¹‚å‡½æ•°å‹",
-      "point": 19.529159,
-      "p05": 19.502898,
-      "p95": 19.560075,
+      "Q0¿Ú¾¶": "Ö÷¿Ú¾¶p*¼ÓÈ¨",
+      "g": "Ãİº¯ÊıĞÍ",
+      "point": 19.529,
+      "p05": 19.503,
+      "p95": 19.56,
       "n_found": 300,
       "n_total": 300
     },
     {
-      "Q0å£å¾„": "ä¸»å£å¾„p*åŠ æƒ",
-      "g": "å¯¹æ•°å‹",
-      "point": 18.579199,
-      "p05": 18.539089,
-      "p95": 18.619738,
+      "Q0¿Ú¾¶": "Ö÷¿Ú¾¶p*¼ÓÈ¨",
+      "g": "¶ÔÊıĞÍ",
+      "point": 18.579,
+      "p05": 18.539,
+      "p95": 18.62,
       "n_found": 300,
       "n_total": 300
     },
     {
-      "Q0å£å¾„": "å‰¯å£å¾„ç½‘é¡µpile_cc",
-      "g": "æŒ‡æ•°å‹",
-      "point": 19.132418,
-      "p05": 19.109186,
-      "p95": 19.158489,
+      "Q0¿Ú¾¶": "¸±¿Ú¾¶ÍøÒ³pile_cc",
+      "g": "Ö¸ÊıĞÍ",
+      "point": 19.132,
+      "p05": 19.109,
+      "p95": 19.158,
       "n_found": 300,
       "n_total": 300
     },
     {
-      "Q0å£å¾„": "å‰¯å£å¾„ç½‘é¡µpile_cc",
-      "g": "å¹‚å‡½æ•°å‹",
-      "point": 19.584704,
-      "p05": 19.557677,
-      "p95": 19.616098,
+      "Q0¿Ú¾¶": "¸±¿Ú¾¶ÍøÒ³pile_cc",
+      "g": "Ãİº¯ÊıĞÍ",
+      "point": 19.585,
+      "p05": 19.558,
+      "p95": 19.616,
       "n_found": 300,
       "n_total": 300
     },
     {
-      "Q0å£å¾„": "å‰¯å£å¾„ç½‘é¡µpile_cc",
-      "g": "å¯¹æ•°å‹",
-      "point": 18.585771,
-      "p05": 18.546241,
-      "p95": 18.626553,
+      "Q0¿Ú¾¶": "¸±¿Ú¾¶ÍøÒ³pile_cc",
+      "g": "¶ÔÊıĞÍ",
+      "point": 18.586,
+      "p05": 18.546,
+      "p95": 18.627,
       "n_found": 300,
       "n_total": 300
     }

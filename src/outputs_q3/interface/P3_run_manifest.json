@@ -1,60 +1,29 @@
 {
-  "run_time_beijing": "2026-09-26T03:45:02+08:00",
+  "time_beijing": "2026-09-26T11:37:00+08:00",
   "git_commit": "8f0f9e674cb24dce068301d94c33b237294301d6",
-  "git_dirty": true,
-  "model_shape": "M4+F",
-  "q_mapping": "identity",
-  "evidence": "q_shape=pow; model=M4+F; floor=True; train=B6 360 点; holdout=B7 中不在 B6 的 90 点（Q=0.5/0.7）; p_channel=exploratory",
-  "m_star": 0.8989423151944644,
-  "m_star_source": "exp(s_red_main * phi_tilde_pstar)",
-  "s_red_main": 1.4996207320397785,
-  "phi_tilde_pstar": -0.07104223742472571,
-  "c7_read": false,
-  "c7_note": "附件 C7 原表不在当前工作区；五档上下文使用 Spec 已核对的情景集合，本次未重读 CSV。",
-  "p_star_path": "src/outputs_q1/interface/P1_p_star.csv",
-  "p_star_column": "p_star_eqweight",
-  "p_star_domains": [
-    "arxiv",
-    "freelaw",
-    "nih_exporter",
-    "pubmed_central",
-    "wikipedia_en",
-    "dm_mathematics",
-    "github",
-    "philpapers",
-    "stackexchange",
-    "enron_emails",
-    "gutenberg_pg_19",
-    "pile_cc",
-    "ubuntu_irc",
-    "europarl",
-    "hackernews",
-    "pubmed_abstracts",
-    "uspto_backgrounds"
-  ],
-  "p_star_sha256": "40714b192ee5da93947a8e1cb81bf87d0063126cfe9e9941adba05082c333f28",
-  "inputs": {
-    "P1_p_star.csv": "40714b192ee5da93947a8e1cb81bf87d0063126cfe9e9941adba05082c333f28",
-    "P1_summary.json": "0f251c2d2fa75f39f07056a349545803dbfc8e31c27564ca2f2d4b697ea7648e",
-    "P1_Q_domain.csv": "d0ca7cfcd0e5083368ced505074baa60773bbf0ea6c88436d15024ce2353d378",
-    "P1_scale_calibration.csv": "94eaadc1f6ad89b95414acd08cfc213781011220dde616060f7a0553265de555",
-    "P2_scaling_law.json": "f1182ed5c1e20ae73e52cca21e5ea35a1dada4013e43e66a98f7d487ad66e515",
-    "P2_bootstrap.npz": "0050cba55e53976c500595ac8c8c08dcbeb9564fb91a67b28975453fa32ecf6d"
-  },
-  "search_bounds_log10N": [
+  "q_shape": "pow",
+  "selected_model": "M4+F",
+  "floor": true,
+  "Q0_main": 0.6624116679870492,
+  "m": 0.8989423151944644,
+  "h_tot_scale": 0.9311640044387456,
+  "m_source": "exp(s_red·φ̃(p*))，只乘随规模下降的两项；地板 k0(1-Q) 在括号外",
+  "search_log10N": [
     1.0,
     17.0
   ],
-  "class_tol": 0.0001,
-  "tie_atol": 1e-08,
-  "cross_solver": "SLSQP multi-start on (log10 N, Q); coarse grid",
-  "random_seed": null,
+  "share_denominator": "实际总消耗",
+  "evidence": "B6 半合成幂次主式；配比通道为探索性；高预算为外推",
+  "inputs": {
+    "P1_summary": "0f251c2d2fa75f39f07056a349545803dbfc8e31c27564ca2f2d4b697ea7648e",
+    "P2_scaling_law": "f1182ed5c1e20ae73e52cca21e5ea35a1dada4013e43e66a98f7d487ad66e515",
+    "P2_bootstrap": "0050cba55e53976c500595ac8c8c08dcbeb9564fb91a67b28975453fa32ecf6d",
+    "P1_Q_domain": "d0ca7cfcd0e5083368ced505074baa60773bbf0ea6c88436d15024ce2353d378",
+    "C7": "ee24622cb3a6334f08d72c9ea373be26d5e5585bb266367c5f66d77499112ffc"
+  },
   "outputs": {
-    "interface/P3_optimal_config.csv": "ed67d5fb16e44689b4a8b22d9dfa394d9cca8bf033f1e6a7d0a67ec59e7caa27",
-    "interface/P3_sensitivity_Lctx.csv": "6ab616f25f3e4684cd0da5c762aa63f972a4373610b33643dad124aa41996e7c",
-    "interface/P3_structural_transition.json": "75b7bcbf1bc0c36266d282a2b327d0873999de4b329649d742865eb4a4519430",
-    "figures/F1_Qstar_vs_C.png": "ae0cea4c7cb274a1e8dfc852c6455679e60fd91e966c4697e37e9e81333baa9a",
-    "figures/F2_cost_shares.png": "5299cd86b9e929aad62265f1bd2db6fdca8dc3458a252fb6d31315a9f12542fe",
-    "figures/F3_NDratio.png": "3946f9f192ffe94f0b3a8c2cd49b52d4fac717005dae66e87a223aab6e1852d4"
+    "P3_optimal_config.csv": "e0c0f525edededbef0604a8838b4d67fa8e8af0398a8e4ee7f44a7058f081d0f",
+    "P3_sensitivity_Lctx.csv": "035589ca985b5c252931b24e47730a41b64bba36bf8c156c31d355193eba1460",
+    "P3_structural_transition.json": "6b77da4f5e8eb0a1708571f3a1e60c411e41f56890d333d3925eec522a5c1124"
   }
 }
