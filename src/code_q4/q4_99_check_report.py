@@ -66,12 +66,35 @@ def run():
     manifest_path = SRC / "outputs_q3/interface/P3_run_manifest.json"
     if manifest_path.is_file():
         manifest = load_json(manifest_path)
-        inputs = manifest.get("inputs_sha256", {})
+        # manifest 由 code_q3/q3_00_model.write_manifest 写出：
+        #   inputs  = {短名: sha256}   （上游 P1/P2/C7 输入指纹）
+        #   outputs = {文件名: sha256}  （本轮 Q3 接口产物指纹）
+        # 短名到实际路径的映射与 write_manifest 中的 inputs 字典一致。
+        input_paths = {
+            "P1_summary": SRC / "outputs_q1/interface/P1_summary.json",
+            "P2_scaling_law": SRC / "outputs_q2/interface/P2_scaling_law.json",
+            "P2_bootstrap": SRC / "outputs_q2/interface/P2_bootstrap.npz",
+            "P1_Q_domain": SRC / "outputs_q1/interface/P1_Q_domain.csv",
+        }
+        inputs = manifest.get("inputs", {})
         valid = bool(inputs)
-        for rel, want in inputs.items():
-            path = REPO / rel
+        for name, want in inputs.items():
+            path = input_paths.get(name)
+            if path is None:
+                # C7 等外部数据源路径随机器而异，仅要求清单已记录其指纹
+                valid &= bool(want)
+                continue
             valid &= path.is_file() and sha256(path) == want
         check("P3 输入哈希与运行清单一致", valid)
+
+        # 输出指纹：证明下游读到的正是本轮写出的 Q3 接口（含 Q3-9 的
+        # bootstrap_with_P1、Q3-10 斜率诊断与外推标注）。
+        outputs = manifest.get("outputs", {})
+        ovalid = bool(outputs)
+        for name, want in outputs.items():
+            path = SRC / "outputs_q3/interface" / name
+            ovalid &= path.is_file() and sha256(path) == want
+        check("P3 输出哈希与运行清单一致（含 Q3-9/Q3-10/外推）", ovalid)
     else:
         check("P3 运行清单存在", False, "缺 P3_run_manifest.json；不能证明上下游同轮")
 
