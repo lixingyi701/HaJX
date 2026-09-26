@@ -5,8 +5,9 @@ q1_06_scale.py — Step6：跨尺度检验、尺度修正与外推表稳健性
   ① A6–A11：冻结 1M clr+Huber 模型直接预测 → 逐域 R²/RMSE/Spearman、排名衰减（P1_rank_decay）
   ② P1_scale_calibration：冻结 1M 系数的逐域校准斜率（仅评估统计量）
   ③ 冻结 1M GBDT 直接预测 60M/1B
-  ⑤ 尺度修正（按规模留一档）：ln L_v = b_v^1M + ρ_v t + (1+κt)·g_v(p)，t=ln(N/1e6)；
-     ρ_v、κ 只由 1M 训练与 60M（A8/A9）确定，1B（A10/A11）只作独立检验
+  ⑤ 尺度修正（按规模留一档）：ln L_v = b_v^1M + ρ_v t + s(N)·g_v(p)，t=ln(N/1e6)；
+     s(N) 两种形式并列：对数线性 1+κt（v7 起，对照）与幂律 (N/1e6)^(-λ)（v9 候选，λ=-ln s(60M)/t60）；
+     ρ_v 与缩放参数只由 1M 训练与 60M（A8/A9）确定，1B（A10/A11）只作独立检验
   ④ A12–A15（估算/外推、非观测）：冻结模型、尺度修正模型与"同配比 1M 观测 Loss"并列；
      A12/A14 是 A4 的子集，A13/A15 由三尺度幂律外推生成，只作一致性对照
 """
@@ -119,10 +120,14 @@ if __name__ == "__main__":
     _, b60_int = pooled_level(G["60M"], lnY["60M"], slope=1.0)
     t60 = tN(6e7)
     kappa, rho, rho_int = (s60 - 1) / t60, (b60 - b1m) / t60, (b60_int - b1m) / t60
+    lam = -np.log(s60) / t60        # 幂律 s(N)=(N/1e6)^(-λ)，与 κ 同源（只读 1M+60M）
 
-    def corrected(Gm, N, slope=True):
+    def corrected(Gm, N, slope=True, form="linear"):
         t = tN(N)
-        return b1m + rho * t + (1 + kappa * t) * Gm if slope else b1m + rho_int * t + Gm
+        if not slope:
+            return b1m + rho_int * t + Gm
+        s = (1 + kappa * t) if form == "linear" else (N / 1e6) ** (-lam)
+        return b1m + rho * t + s * Gm
 
     s1b_obs, b1b_obs = pooled_level(G["1B"], lnY["1B"])
     sc_rows = []
@@ -130,7 +135,8 @@ if __name__ == "__main__":
         N = SCALES[tag][2]; Y = data[tag][1]
         for name, lnh in (("冻结1M", b1m + G[tag]),
                           ("仅截距修正", corrected(G[tag], N, slope=False)),
-                          ("截距+缩放修正", corrected(G[tag], N))):
+                          ("截距+缩放修正(对数线性)", corrected(G[tag], N, form="linear")),
+                          ("截距+缩放修正(幂律)", corrected(G[tag], N, form="power"))):
             sc_rows.append(dict(scale=tag, N=N, role=role, method=name, **level_metrics(Y, lnh, w_eval)))
     sc_rows.append(dict(scale="1B", N=1e9, role="同集拟合（误差下界参照，不作结论）", method="1B同集截距+斜率",
                         **level_metrics(data["1B"][1], b1b_obs + s1b_obs * G["1B"], w_eval)))
@@ -140,9 +146,10 @@ if __name__ == "__main__":
                             b_1B_insample=b1b_obs))
     par["kappa"] = kappa; par["s_60M"] = s60
     par["s_1B_pred"] = 1 + kappa * tN(1e9); par["s_1B_insample"] = s1b_obs
+    par["lambda"] = lam; par["s_1B_pred_power"] = (1e9 / 1e6) ** (-lam)
     par.to_csv(f"{TABLES}/T6_scale_correction_params.csv", index=False)
-    print(f"\n尺度修正（ρ_v、κ 只由 1M 训练 + 60M 定）：s(60M)={s60:.4f}, κ={kappa:.5f}, "
-          f"s(1B) 预测 {1 + kappa * tN(1e9):.4f} / 同集 {s1b_obs:.4f}")
+    print(f"\n尺度修正（ρ_v、κ、λ 只由 1M 训练 + 60M 定）：s(60M)={s60:.4f}, κ={kappa:.5f}, λ={lam:.5f}, "
+          f"s(1B) 预测 对数线性 {1 + kappa * tN(1e9):.4f} / 幂律 {(1e9/1e6)**(-lam):.4f} / 同集 {s1b_obs:.4f}")
     print(sc_tab.round(4).to_string(index=False))
 
     # ---- ④ A12–A15 估算表：冻结模型 + 尺度修正 + 同配比 1M 观测基准 ----
@@ -158,7 +165,8 @@ if __name__ == "__main__":
         same_mix = bool(np.allclose(Ptr_sub, P, atol=1e-6))
         Z = clr(P)
         preds = {"冻结1M线性": np.exp(predict_all(B_clr, Z)), "冻结1M_GBDT": gbdt_all(gb_1m, Z),
-                 "1M线性+尺度修正(1M+60M标定)": np.exp(corrected(Z @ Bet.T, N)),
+                 "1M线性+尺度修正-对数线性(1M+60M标定)": np.exp(corrected(Z @ Bet.T, N, form="linear")),
+                 "1M线性+尺度修正-幂律(1M+60M标定)": np.exp(corrected(Z @ Bet.T, N, form="power")),
                  "同配比1M观测Loss": Y1m}
         Lt = Y @ w_eval
         for name, Yh in preds.items():
@@ -206,12 +214,17 @@ if __name__ == "__main__":
     xo = [1e6, 6e7, 1e9]
     yo = [float(Ytr.mean()), obs.loc["60M", "mean_obs_loss"], obs.loc["1B", "mean_obs_loss"]]
     ax.semilogx(xo, yo, "ko", ms=8, label="观测（1M 训练 / 60M / 1B）")
-    corr = sc_tab[sc_tab.method == "截距+缩放修正"].set_index("scale")
-    ext_c = ext_tab[ext_tab.method.str.startswith("1M线性+尺度修正")]
+    corr = sc_tab[sc_tab.method == "截距+缩放修正(对数线性)"].set_index("scale")
+    corr_p = sc_tab[sc_tab.method == "截距+缩放修正(幂律)"].set_index("scale")
+    ext_c = ext_tab[ext_tab.method == "1M线性+尺度修正-对数线性(1M+60M标定)"]
+    ext_p = ext_tab[ext_tab.method == "1M线性+尺度修正-幂律(1M+60M标定)"]
     fit_1m = float(np.exp(predict_all(B_clr, clr(Ptr))).mean())
     xc = xo + ext_c.N.tolist()
     yc = [fit_1m, corr.loc["60M", "mean_pred_loss"], corr.loc["1B", "mean_pred_loss"]] + ext_c.mean_pred_loss.tolist()
-    ax.semilogx(xc, yc, "s--", color="#2b8cbe", label="尺度修正（只用 1M+60M 标定）")
+    ax.semilogx(xc, yc, "s--", color="#2b8cbe", label="尺度修正-对数线性（只用 1M+60M 标定）")
+    xp = xo + ext_p.N.tolist()
+    yp = [fit_1m, corr_p.loc["60M", "mean_pred_loss"], corr_p.loc["1B", "mean_pred_loss"]] + ext_p.mean_pred_loss.tolist()
+    ax.semilogx(xp, yp, "v-.", color="#31a354", label="尺度修正-幂律（只用 1M+60M 标定）")
     ax.semilogx(xo, [fit_1m, obs.loc["60M", "mean_pred_loss"], obs.loc["1B", "mean_pred_loss"]],
                 "^:", color="#fd8d3c", label="冻结 1M（不修正）")
     ext_e = ext_c.drop_duplicates("est_table")

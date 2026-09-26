@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 q1_03b_source_consistency_Q.py — 基于来源内部一致性（Kendall W）调整CRITIC权重后重算Q
+（方法学定位：Dempster-Shafer 证据理论的可靠性折扣，Kendall W 即各来源证据的折扣系数，
+ 对指标意见按来源可靠性打折后再合成；Q_v2 为对照口径的折扣综合评价模型）
 
 设计原则：
-  ① 来源级 Kendall W 作先验可靠性权重，乘以原 CRITIC 权重后重归一化
+  ① 来源级 Kendall W 作先验可靠性权重（D-S 折扣系数），乘以原 CRITIC 权重后重归一化
   ② 不依赖任何单篇文档的冲突状态——是全局、非条件的权重调整
-  ③ Q_v2 作实验性对照，不替换 P1 主接口的主 Q
+  ③ Q_v2 作 D-S 折扣对照口径，不替换 P1 主接口的主 Q
   ④ 同时报告 A1/A2/A3，验证结论跨集是否成立
   ⑤ 指标顺序与 q1_00_common.IND_COLS 对齐（共 25 项）
 
