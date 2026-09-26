@@ -4,20 +4,27 @@
 \subsubsection{模型建立}
 \label{sec:5.4.1}
 
-给定总预算 $C$（绝对 FLOPs）与外生上下文长度 $L_{ctx}$（token），在 $N$（个）、$D$（token）、$Q\in(0,1]$ 上最小化问题二的幂次主式。**主方案固定问题一在 A4 训练信赖域内选出的 17 域推荐配比 $\bp^*$**（赛题允许的建模选择，不是"配比与规模精确可分离"的定理），此时
+给定总预算 $C$（绝对 FLOPs）与外生上下文长度 $L_{ctx}$（token），在 $N$（参数个数）、$D$（训练 token 数）和 $Q\in[Q_0,1]$ 上最小化问题二的幂次主式。主方案固定问题一在 A4/A5 训练信赖域内选出的 17 域推荐配比 $\bp^*$；这是题目允许的建模选择，不表示配比与规模精确可分离。记
 
 \begin{equation*}
-m_*=\exp\{s_{\rm red}\tilde\varphi(\bp^*)\}\approx0.8989423,\qquad
-L=E+k_0(1-Q)+m_*\bigl(AN^{-\alpha}Q^{-\kappa_N}+BD^{-\beta}Q^{-\kappa_D}\bigr),
+\begin{aligned}
+m_*&=\exp\{s_{\rm red}\tilde\varphi(\bp^*)\}\approx0.8989423,\\
+T_N&=AN^{-\alpha}Q^{-\kappa_N},\qquad T_D=BD^{-\beta}Q^{-\kappa_D},\\
+L&=E+k_0(1-Q)+m_*(T_N+T_D),
+\end{aligned}
 \end{equation*}
 
-乘子只作用于两项随规模变化的损失，不作用于 $E$ 或地板；系数 $E,A,\alpha,B,\beta,\kappa_N,\kappa_D,k_0$ 全部读取 P2 接口，不在本问重拟合。约束为
+乘子只作用于两项随规模变化的损失，不作用于 $E$ 或质量地板。主质量映射按 P2 接口取 $Q_B=Q_A$，故当前 $Q_0=0.6624116679870492$；这是跨问题质量尺度的建模假设，不是直接观测等式。系数 $E,A,\alpha,B,\beta,\kappa_N,\kappa_D,k_0$ 全部读取冻结的 P2 接口，不在本问重拟合。约束为
 
 \begin{equation*}
 6ND+D\bigl[g(Q)-g(Q_0)\bigr]_++\eta NDL_{ctx}\le C,\qquad Q_0\le Q\le1,\qquad \eta=2\times10^{-4},
 \end{equation*}
 
+作为映射敏感性对照，P2 的锚点映射 $Q_B=Q_A/Q_A(\bp^*)$ 在推荐配比处给出 $Q_0=1$，此时没有可行的提质区间，记为 \texttt{NO\_QUALITY\_RANGE}。该映射下若域级质量超过 $[0,1]$ 支持范围，按 P2 的 \texttt{clip\_policy=error} 标记，不作静默截断。
+
 必须比较题目附录 B 的三类单位 token 提质成本：指数型 $g=10^7e^{6Q}$（凸）、幂函数型 $g=5\times10^9Q^4$（凸）、对数渐近型 $g=2\times10^9\ln(1+10Q)$（凹）。本问按\textbf{单次训练的静态预算情景}建模；题面未给训练起止日期、逐期预算、GPU 数、工期或碳排放等约束，不能把它们写成硬要求。题面建议 $C=10^{19},10^{22},10^{24}$ FLOPs，硬要求是至少三个不同量级；本项目自主采用 $10^{19}$ 至 $10^{25}$ 共七档网格，并把三个建议档单列。$L_{ctx}$ 是情景输入，不由优化器自由选择。连续 $N,D$ 与 $Q\ge Q_0$ 是为解析求解设定的建模假设。
+
+优化结论继承问题一、二的证据边界：$\bp^*$ 来自 A4/A5 训练信赖域内的线性 clr+Huber 主模型，GBDT 仅作对照，候选配比收益是预测值而非重新训练的实测收益。幂次 M4+地板是问题二当前指定主式，并非交叉验证中预测误差最低的形式；其质量项由 B6 的 360 个半合成样本估计，B7 新增的 90 个半合成点用于 $Q$ 方向插值留出。幂次主式留出 RMSE 约为 $0.053$，高于线性 M4+地板对照的约 $0.042$，且 $\kappa_D$ 的条件区间包含 $0$。因此，问题三的最优配置是给定该标度律、映射及参数后的模型内方案，不能解释为真实训练收益或已验证的数据侧质量效应。配比乘子通道在问题二中也标为探索性假设，含 $m_*$ 的结论须保留这一条件性。
 
 \textbf{降维与闭式对照。} 三项成本都与 $D$ 成正比，而 $\partial L/\partial D=-m_*\beta T_D/D<0$，故在无额外 $D$ 上限的本模型内预算用尽。记 $K=6+\eta L_{ctx}$、$\Delta g=[g(Q)-g(Q_0)]_+$，由约束取等得
 
@@ -47,14 +54,14 @@ F_Q=-k_0-\frac{m_*}{Q}(\kappa_NT_N+\kappa_DT_D)+\frac{m_*\beta T_Dg'(Q)}{S},\qqu
 \subsubsection{求解方法}
 \label{sec:5.4.2}
 
-问题三的求解器与接口脚本位于 \texttt{src/code\_q3/}（\texttt{q3\_00\_model.py}、\texttt{q3\_01\_optimize.py}、\texttt{q3\_02\_transition.py}、\texttt{q3\_03\_mixture\_joint.py}），联立配比探索性脚本的随机种子为 $2026$。**本版 Spec v5 的目标式（幂次 M4+地板并含 $m_*$）尚未在代码与 P3 接口中实现，因此 \ref{sec:5.4.3} 只给出求解方案与解析对照，数值结果待重跑；现有 \texttt{src/outputs\_q3/} 产物为旧线性口径，只作对照。
+按 \ref{sec:5.4.1} 消去 $D$ 后，在 $(\log_{10}N,Q)$ 上求解。固定 $Q$ 的内层对 $\log_{10}N$ 可用有界一维搜索；须核对搜索边界没有截住解。外层对 $Q$ 加密搜索并保护 $Q_0$、$1$ 两个端点，同时比较多个内点候选和独立粗网格，以检查不同局部极小分支。局部 $\Phi=1$ 根与全局状态切换分别识别；仅当搜索区间已括根且已检查为单次切换时，才用二分定位临界预算。主网格为 3 种成本函数 $\times$ 7 档预算 $\times$ 5 档 C7 上下文长度 $\times$ 2 个同一质量映射下的起始质量对照，共 210 组；这是本项目设计，不是赛题规定的运行组数。对 $Q_0=1$ 和未括根的情形，分别记录 \texttt{NO\_QUALITY\_RANGE}、\texttt{NOT\_BRACKETED} 与空数值，不以搜索上界代替结果。
 
-按 \ref{sec:5.4.1} 消去 $D$，在 $(\log_{10}N,Q)$ 上求解：内层对 $\log_{10}N$ 用黄金分割搜索（约束取等后的剖面损失关于 $N$ 单峰），外层对 $Q$ 用网格加密并保护端点 $Q_0$ 与 $1$，同时保留独立粗网格穷举核对，并分别输出局部 $\Phi=1$ 根与全局状态切换点。主网格为 3 种成本函数 $\times$ 7 档预算 $\times$ 5 档 C7 上下文长度 $\times$ 2 个同映射下的起始质量对照，共 210 组（本项目设计，不是赛题规定的组数）。临界预算的搜索用二分，且仅在已括根、已验证单次切换的区间内使用；未括根与 $Q_0=1$ 两种情形显式返回 \texttt{NOT\_BRACKETED}/\texttt{NO\_QUALITY\_RANGE} 与 \texttt{null}。
+现有 \texttt{src/code\_q3/} 中的求解器仍使用线性质量因子 $1+\kappa_N(1-Q)$、$1+\kappa_D(1-Q)$，且未按 P2 公式保留 $m_*$；现有 P3 接口和表图也未按 Spec v5 更新，目录中没有本版运行 manifest。因此以下只说明按 v5 应采用的求解步骤和已有解析推导，新主式配置、Loss、成本份额、临界预算及区间均标为待重跑，不以旧接口替代。当前 \texttt{q3\_03\_mixture\_joint.py} 还依赖 P1 内部 GBDT 缓存，并把配比因子乘在整个 Loss 上，与 P2 主式的配比通道定义不一致；其旧联立结果不作为本章证据。
 
 \subsubsection{结果与分析}
 \label{sec:5.4.3}
 
-\textbf{本节写作限制。} \texttt{doc/Q3/问题三\_SPEC.md} v5 已把目标式改为问题二的幂次 M4＋地板并保留固定配比乘子 $m_*\approx0.8989423$，但 \texttt{src/code\_q3/} 与 \texttt{src/outputs\_q3/} 尚未按该版重跑：现有产物生成于 2026-09-25 15:02，当时读取的是\textbf{线性质量式}的 $\kappa_N=0.4315$、$\kappa_D=0.1405$、$k_0=0.1407$ 与 $Q_0=0.6608889991$。因此本小节依次给出：规范目标下的解析结论；现有落盘结果的旧口径对照（明确不作结论）；待补证据清单。
+\textbf{结果证据范围。} 当前 Spec v5 已将目标式固定为问题二的幂次 M4+质量地板，并保留配比乘子 $m_*\approx0.8989423$。现有求解代码仍使用线性质量因子且未乘 $m_*$；旧 P3 接口记录的 $Q_0=0.6608889991$ 与当前输入快照不同。旧输出没有运行 manifest，也没有完整参数快照，因而不能确认其余输入版本，更不能支持本版最优配置或临界预算结论。下文先给出可由 v5 目标式推出的解析关系，再隔离列示旧接口口径，最后列出尚待重跑的证据。
 
 \textbf{预算取等与降维。} 三项成本都与 $D$ 成正比，且 $\partial L/\partial D=-m_*\beta T_D/D<0$，故在无额外 $D$ 上限的本模型内预算用尽，$D=C/(KN+\Delta g)$，其中 $K=6+\eta L_{ctx}$、$\Delta g=[g(Q)-g(Q_0)]_+$；问题降为 $(\log_{10}N,Q)$ 的二维有界优化。
 
@@ -68,14 +75,13 @@ F_Q=-k_0-\frac{m_*}{Q}(\kappa_NT_N+\kappa_DT_D)+\frac{m_*\beta T_Dg'(Q)}{S},\qqu
 
 \begin{table}[H]
 \centering\small
-\caption{现有 P3 产物的口径与状态计数（数据源：\texttt{interface/P3\_optimal\_config.csv}、\texttt{T1\_optimal\_all.csv}，）}
+\caption{旧版 P3 输出与 v5 规范的差异（数据源：\texttt{src/outputs\_q3/interface/P3\_optimal\_config.csv}、\texttt{src/outputs\_q3/tables/T1\_optimal\_all.csv}；仅作历史口径记录）}
 \label{tab:q3old}
 \begin{tabularx}{\textwidth}{@{}p{3.7cm}X p{4.3cm}@{}}
 \toprule
 项目 & 现有落盘值 & 与 v5 目标规范的差异 \\
 \midrule
-质量式 & 线性 $1+\kappa(1-Q)$ & v5 要求幂次 $Q^{-\kappa}$ \\
-$\kappa_N,\kappa_D,k_0$ & 0.4315, 0.1405, 0.1407 & 当前 P2 为 0.1416, 0.0112, 0.2280 \\
+质量参数快照 & P3 输出未记录 & 缺少 manifest，不能与当前 P2 参数组逐项核对 \\
 $Q_0$ & 0.6608889991 & 当前 P1/P2 为 0.6624116679870492 \\
 配比乘子 $m_*$ & 未使用 & v5 要求 0.8989423 并另报 \texttt{m=1} \\
 主网格状态计数 & 8 组 \texttt{Q0} 角点、18 组内点、184 组提满 & 须按 v5 重算 \\
@@ -91,8 +97,10 @@ $\Phi=1$ 解析根 & 18.833/19.358/18.669 & 须按 v5 重算 \\
 
 \textbf{待补证据清单（问题三）。}
 
-1. 按 v5 目标式改写 \texttt{src/code\_q3/q3\_00\_model.py}（$h_N,h_D$、$\Phi$、闭式对照）后重跑全链，生成 \texttt{P3\_optimal\_config.csv}、\texttt{P3\_sensitivity\_Lctx.csv}、\texttt{P3\_structural\_transition.json} 与 \texttt{P3\_run\_manifest.json}（含 P1/P2/C7 输入 SHA-256）。\texttt{【需补证据：Q3-1、Q3-2、Q3-5】}
-2. 主情景读取 $m_*$ 并另报 \texttt{m=1}、\texttt{H\_tot} 与 P2 无地板参数的对照；同一场景下比较四种口径的 $N,D,Q,L$。\texttt{【需补证据：Q3-6、Q3-9】}
-3. 分别输出局部 $\Phi=1$ 根与全局状态切换点，并对 $Q_0=1$、未括根、多根三种情形做专用验收。\texttt{【需补证据：Q3-7】}
-4. 补三项成本绝对值、总消耗与预算使用率字段，统一份额分母为实际总消耗，并把三个题面建议档单列。\texttt{【需补证据：Q3-8】}
-5. P1 质量与配比误差、P2 锚点映射误差进入敏感性；缺少逐次重抽样接口时，把全链区间标注为未完成。\texttt{【需补证据：Q3-3、Q3-9】}
+\begin{enumerate}
+\item 按 v5 目标式更新求解器中的幂次质量项、$\Phi$ 和解析对照，再重跑全链，生成与本版一致的最优配置、上下文敏感性、结构转移和运行 manifest（含 P1/P2/C7 输入 SHA-256）。\texttt{【需补证据：Q3-1、Q3-2、Q3-5】}
+\item 主情景读取 $m_*$，并在相同场景下计算 \texttt{m=1}、\texttt{H\_tot} 与 P2 单独重估无地板参数的对照。\texttt{【需补证据：Q3-6、Q3-9】}
+\item 分别输出局部 $\Phi=1$ 根与全局状态切换点，并验收 $Q_0=1$、未括根及多根情形。\texttt{【需补证据：Q3-7】}
+\item 补齐三项成本绝对值、总消耗和预算使用率，统一成本份额分母为实际总消耗，并单列题面建议的三个预算档。\texttt{【需补证据：Q3-8】}
+\item 将 P1 域质量、配比不确定性及 P2 锚点映射误差纳入敏感性；若缺少逐次重抽样接口，则明确全链区间尚未完成。\texttt{【需补证据：Q3-3、Q3-9】}
+\end{enumerate}
