@@ -1,0 +1,4 @@
+\section{数据来源与接口约定}
+\label{sec:5.1}
+
+正文只使用三组附件的既有编号（A1–A18、B1–B12、C1–C10），单位纪律如下：\texttt{N\_params\_B}、\texttt{D\_tokens\_B} 的单位均为 $10^9$，代入 $C=6ND$ 时须乘 $10^{18}$；\texttt{C\_FLOPs\_1e21} 的单位为 $10^{21}$ FLOPs，不直接代入绝对预算 $C$。跨问只传递已定义的质量分、配比与模型参数：问题一输出 \texttt{src/outputs\_q1/interface/} 下的 \texttt{P1\_Q\_domain.csv}、\texttt{P1\_p\_star.csv}、\texttt{P1\_summary.json}、\texttt{P1\_scale\_calibration.csv} 等；问题二输出 \texttt{src/outputs\_q2/interface/P2\_scaling\_law.json} 等；问题三、问题四分别输出 \texttt{P3\_*}、\texttt{P4\_*}。下游不读缓存文件。路径解析见 \texttt{src/code\_q1/q1\_00\_common.py} 等脚本（附件目录优先取仓库根目录 \texttt{附件/}）。
