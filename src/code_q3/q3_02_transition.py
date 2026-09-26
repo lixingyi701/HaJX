@@ -134,6 +134,38 @@ if __name__ == "__main__":
     BS.to_csv(f"{TAB}/T2_bootstrap_ccrit.csv", index=False, encoding="utf-8-sig")
     print(BS.round(3).to_string(index=False))
 
+    # ============ 5b. P1 配比重抽样不确定性 → 临界预算（Q3-9） ============
+    # 读取 P1 逐次重抽样接口（q1_07 导出的 200 次重选 p*），把 Q0(p*)=Σp_i Q_i 的重抽样
+    # 不确定性传播到离开下界的临界预算。本项只含配比重抽样（P2 参数取点估计），
+    # 与上方 P2 联合 bootstrap 分开报告（不同来源，不合并）。
+    try:
+        pstar_boot = pd.read_csv(f"{ROOT}/outputs_q1/interface/P1_pstar_bootstrap.csv")
+        qdom = pd.read_csv(f"{ROOT}/outputs_q1/interface/P1_Q_domain.csv", encoding="utf-8-sig")
+        qmap = dict(zip(qdom["mixture_domain"], qdom["Q_final"]))
+        dom_cols = list(pstar_boot.columns)
+        Qvec = np.array([float(qmap[d]) for d in dom_cols])
+        Q0_boot = pstar_boot.values @ Qvec
+        print(f"P1 配比重抽样：Q0(p*) 均值 {Q0_boot.mean():.6f}，5–95% "
+              f"[{np.percentile(Q0_boot, 5):.6f}, {np.percentile(Q0_boot, 95):.6f}]；"
+              f"点估计 Q0_MAIN={Q0_MAIN:.6f}")
+        rows_p = []
+        for g in G_LIST:
+            cc = c_crit(g, 2048, Q0_boot, which="leave")
+            valid = cc[np.isfinite(cc)]
+            rows_p.append(dict(g=g, Q0_point=Q0_MAIN,
+                               Q0_p05=float(np.percentile(Q0_boot, 5)),
+                               Q0_p95=float(np.percentile(Q0_boot, 95)),
+                               C_crit_p05=float(np.percentile(valid, 5)) if len(valid) else np.nan,
+                               C_crit_p50=float(np.percentile(valid, 50)) if len(valid) else np.nan,
+                               C_crit_p95=float(np.percentile(valid, 95)) if len(valid) else np.nan,
+                               n_found=int(len(valid)), n_total=int(len(cc))))
+        PS = pd.DataFrame(rows_p)
+        PS.to_csv(f"{TAB}/T2_pstar_bootstrap_ccrit.csv", index=False, encoding="utf-8-sig")
+        print(PS.round(3).to_string(index=False))
+    except FileNotFoundError:
+        PS = None
+        print("P1_pstar_bootstrap.csv 不存在，跳过配比重抽样传播（待 q1_07 刷新缓存后重跑）")
+
     # ============ 6. L_ctx 敏感性表（接口） ============
     OPT = pd.read_csv(f"{IFACE}/P3_optimal_config.csv")
     base = OPT[OPT.L_ctx == 2048].set_index(["Q0口径", "g", "log10C"])
@@ -193,7 +225,12 @@ if __name__ == "__main__":
         bootstrap=[{k: (finite_or_none(v) if isinstance(v, (float, np.floating)) else v)
                     for k, v in row.items()}
                    for row in BS[["Q0口径", "g", "point", "p05", "p95", "n_found", "n_total"]]
-                   .to_dict("records")])
+                   .to_dict("records")],
+        pstar_bootstrap=([{k: (finite_or_none(v) if isinstance(v, (float, np.floating)) else v)
+                           for k, v in row.items()}
+                          for row in PS[["g", "Q0_point", "Q0_p05", "Q0_p95", "C_crit_p05",
+                                         "C_crit_p50", "C_crit_p95", "n_found", "n_total"]]
+                          .to_dict("records")] if PS is not None else None))
     json.dump(J, open(f"{IFACE}/P3_structural_transition.json", "w"), ensure_ascii=False, indent=2,
               allow_nan=False)
 

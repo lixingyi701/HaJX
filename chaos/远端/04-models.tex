@@ -1,0 +1,359 @@
+\section{模型的建立与求解}
+\subsection{数据预处理}
+首先按附件说明核对字段、单位和表间连接键。A1 是七个质量领域的分层抽样集，共 51{,}230 篇；A2 为 17{,}523 篇 arxiv 全量文档，A3 为 203{,}752 篇 github 全量文档。A4/A5 各 512 组配比与验证损失，按 \texttt{index} 连接；A6/A7 为 1M 留出，A8/A9 的 60M 数据用于冻结检验和尺度修正标定，A10/A11 的 64 组 1B 数据仅用于独立检验。A12--A15 为估算或外推表，不作为实际训练观测。A16 将 17 个配比域划为 3 个直接、3 个近似和 11 个推断映射域。
+
+\subsection{问题一的模型建立与求解}
+问题一依次完成三项任务：建立文档及领域质量分，诊断质量指标的分歧，估计领域配比对验证损失的影响。质量分先于分歧诊断确定；后者只提供待复核的文档，不反向调整评分。配比模型以 1M 训练实验拟合，推荐配比限定在训练数据覆盖的区域内，并分别检验模型在更大规模上的表现。
+
+\subsubsection{质量指标与综合评分}
+附件 A1 含七个领域的 51{,}230 篇文档；A2 为 17{,}523 篇 arxiv 文档，A3 为 203{,}752 篇 github 文档。将 22 个原始字段整理为 25 个标量指标：ModernBERT 的四组六档 logits 经 softmax 后取档位期望，QuRating 拆为四维，英文流畅度和广告分类器取标签 1 的概率，其中广告分类器的标签 1 表示无广告；另有 FineWeb-Edu、三项 DSIR 和十一项 RPS 规则特征。
+
+先对 DSIR 除以词数，再在 A1 各领域内对 $\log(1+\text{词数})$ 作含截距回归，以残差参与评分。词数、句数、平均词长和词熵用距 A1 同领域中位数的负绝对偏差表示偏离适宜值的程度。其余指标统一为越大越好；对符合条件的非负重尾值作 $\log(1+x)$ 变换，再按 A1 同领域的 1\% 和 99\% 分位缩尾并缩放至 $[0,1]$，缺失值以 A1 同领域、同指标的标准化中位数填补。上述回归、变换及填补参数均由 A1 确定，A2、A3 只应用这些固定规则。A1 的七个领域与三项 DSIR 构成 21 组检查：DSIR 与词数的绝对 Spearman 相关中位数由 0.957 降至按词数相除后的 0.599，残差化后为 0.095；book 领域仍有剩余相关，校正不能视为完全消除了长度影响。
+
+记 $z_j(x)$ 为文档 $x$ 的第 $j$ 项标准化指标，$s_j$ 为该项在 A1 上的标准差，$r_{jk}$ 为两项指标的相关系数。按 CRITIC 方法确定固定权重：
+\begin{equation}
+C_j=s_j\sum_{k=1}^{25}(1-r_{jk}),\qquad
+w_j=\frac{C_j}{\sum_{\ell=1}^{25}C_\ell},\qquad \sum_{j=1}^{25}w_j=1.
+\label{eq:q1_critic}
+\end{equation}
+对每篇文档，以加权 Huber 中心作为唯一主质量分：
+\begin{equation}
+Q(x)=\arg\min_{q\in[0,1]}\sum_{j=1}^{25}w_j\rho_\delta(z_j(x)-q),\quad
+\rho_\delta(u)=\begin{cases}\frac12u^2,&|u|\leq\delta,\\
+\delta(|u|-\frac12\delta),&|u|>\delta.
+\end{cases}
+\label{eq:q1_huber}
+\end{equation}
+$\delta=0.403491$ 由 A1 的加权 MAD 尺度规则确定，在 A2、A3 上不重新估计；一维凸目标用导数二分法求解。领域分取 $Q_d=\operatorname{median}_{x\in d}Q(x)$，并用 2{,}000 次文档 bootstrap 计算条件区间。A1 主分与加权算术均值、PCA、TOPSIS 的文档排序 Spearman 分别为 0.9936、0.8166、0.9588。对指标偏离最明显的 10\% 文档，删除最偏离中心的一项后，Huber 分数绝对变化中位数为 0.0260，算术均值为 0.0374。这些结果说明方法间的排序关系及对单项扰动的敏感程度，不能替代人工质量真值检验。
+
+\begin{table}[H]
+\centering\small
+\caption{A1 七个领域的主质量分中位数与条件区间}
+\label{tab:q1_quality}
+\begin{tabular}{lrl}
+\toprule 领域 & A1 文档数 & 中位数（95\% 区间） \\
+\midrule
+arxiv & 1{,}419 & 0.7707 [0.7671, 0.7754] \\
+book & 171 & 0.6313 [0.6138, 0.6500] \\
+c4 & 10{,}000 & 0.6545 [0.6525, 0.6566] \\
+commoncrawl & 9{,}640 & 0.6761 [0.6739, 0.6784] \\
+github & 10{,}000 & 0.6172 [0.6157, 0.6189] \\
+stackexchange & 10{,}000 & 0.6600 [0.6582, 0.6621] \\
+wikipedia & 10{,}000 & 0.5991 [0.5971, 0.6015] \\
+\bottomrule
+\end{tabular}
+\end{table}
+\begin{figure}[H]
+\centering
+\includegraphics[width=.78\linewidth]{figures/q1_F2_domain_quality_box.png}
+\caption{A1 七个领域的主质量分分布}
+\label{fig:q1_quality_box}
+\end{figure}
+A2 的 arxiv 中位数为 0.7697，A3 的 github 为 0.6158，与 A1 相应领域比较的 KS 检验 $p$ 值分别为 0.313、0.220。现有样本未检出明显分布差异，但不能据此认定抽样完全无偏或评分准确。
+
+\subsubsection{单指标与六来源分歧诊断}
+主质量分确定后，再按产生方式把 25 项指标分为 RPS（11 项）、DSIR（3 项）、轻量分类器（2 项）、FineWeb-Edu（1 项）、QuRating（4 项）和 ModernBERT（4 项）。先用 A1 同领域、同指标的经验分布将 $z_j(x)$ 转为中秩 $r_j(x)$，取各来源内指标秩的中位数 $m_s(x)$，再用 A1 同领域该来源中心的经验分布转为可比较的位置 $u_s(x)$：
+\begin{equation}
+\begin{aligned}
+r_j(x)&=F_{dj}^{A1,\mathrm{mid}}(z_j(x)), &
+m_s(x)&=\operatorname{median}_{j\in I_s}r_j(x),\\
+u_s(x)&=F_{ds}^{A1,\mathrm{mid}}(m_s(x)), &
+B(x)&=\max_s u_s(x)-\min_s u_s(x).
+\end{aligned}
+\label{eq:q1_conflict}
+\end{equation}
+以 A1 各领域 $B$ 的第 95 百分位筛查高分歧文档；超过阈值，且至少两个来源满足 $u_s\geq0.8$、另有至少两个来源满足 $u_s\leq0.2$ 时，标为多来源对立候选。A2、A3 沿用 A1 的经验分布与阈值。来源内部还检查指标秩跨度及逐项留一偏离，以识别被来源中心掩盖的孤立指标。A1 的 P95 阈值预设了约 5\% 的筛查数量，候选比例不是实际质量错误率；分歧诊断也不改变 $Q(x)$。
+
+\begin{table}[htbp]
+\centering\small
+\caption{固定 A1 规则后的分歧筛查结果；比例以各集文档总数为分母}
+\label{tab:q1_candidates}
+\begin{tabular}{lrrr}
+\toprule 数据集 & 高分歧候选 & 多来源对立候选 & 单指标独有候选 \\
+\midrule
+A1 抽样集 & 5.00\% & 1.36\% & 5.62\% \\
+A2 arxiv 全量 & 4.73\% & 1.58\% & 4.05\% \\
+A3 github 全量 & 4.99\% & 1.77\% & 4.22\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+单指标独有与来源间高分歧遵循不同规则，不能把比例相加。A1 的来源内部 Kendall $W$ 分别为 RPS 0.140、DSIR 0.967、轻量分类器 0.691、QuRating 0.675、ModernBERT 0.579；FineWeb-Edu 只有一项，不适用。RPS 文档内秩跨度 $P_{90}-P_{10}$ 的中位数为 0.625，69.45\% 的文档在该来源内同时出现低于 20\% 与高于 80\% 的指标。这表明同一来源的规则信号也可能给出相反的相对排序，不能直接判定某项测量出错。历史四来源方法在 A1、A2、A3 标出 19.08\%、24.52\%、23.28\% 的候选；把两种方法的 A1 筛查规模配平至约 5\% 后，候选集的 Jaccard 相似度分别为 0.324、0.283、0.259。由于分组与参照规则同时变化，且缺少人工标注，这一比较不能说明哪种方法更准确。
+
+\begin{figure}[htbp][H]
+\centering
+\begin{minipage}{.48\linewidth}\centering
+\includegraphics[width=\linewidth]{figures/q1_F3_source_internal.png}
+\end{minipage}\hfill
+\begin{minipage}{.48\linewidth}\centering
+\includegraphics[width=\linewidth]{figures/q1_F3_matched_overlap.png}
+\end{minipage}
+\caption{左：RPS 内部指标分歧；右：配平筛查规模后两种方法的候选仍有差异}
+\label{fig:q1_conflict_comparison}
+\end{figure}
+
+以来源内部 Kendall $W_{s(j)}$ 调整 CRITIC 权重，令 $\widetilde w_j\propto w_jW_{s(j)}$，在相同 Huber 参数下得到实验性对照分 $Q_{\mathrm{v2}}$。它与主分在 A1、A2、A3 的全局 Spearman 相关分别为 0.9547、0.9207、0.9395，A1 七域排序未变。此实验只检查权重调整的影响；没有人工质量标签证明对照分更准确，因此下游评分、桥接和配比仍使用主 $Q$。
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=.78\linewidth]{figures/q1_F3_Q_v2_domain_median.png}
+\caption{来源一致性加权对照分与主分在 A1 的领域排序相同}
+\label{fig:q1_v2_domains}
+\end{figure}
+
+\subsubsection{17 域桥接与配比—损失模型}
+A16 所列 17 个配比领域中，3 个直接对应领域及 3 个近似对应领域沿用 A1 主分中位数和同源 bootstrap 区间。其余 11 个领域使用 A1 中 21{,}590 篇有原文的文档，以同一 $Q$ 为标签、11 项可复算的近似规则特征为输入，按领域分层五折比较模型；用选出的 GBDT 对 A18 的 31{,}340 篇有效文档预测，取各领域预测分的中位数和文档 bootstrap 区间。五折平均 $R^2$ 为 0.4106，Ridge 对照为 0.3415。六个有对应 A1 评分的领域中，预测与 A1 中位数的 Spearman 为 0.7714，MAE 为 0.0365，但样本量仅有 6；推断领域的区间不包含模型选择和跨域偏差。
+
+记 $Q_i$ 为第 $i$ 个领域的最终质量分，配比 $\mathbf p=(p_1,\ldots,p_{17})$ 的加权语料质量为
+\begin{equation}
+\bar Q(\mathbf p)=\sum_{i=1}^{17}p_iQ_i,\qquad p_i\geq0,\quad\sum_{i=1}^{17}p_i=1.
+\label{eq:q1_mix_quality}
+\end{equation}
+质量聚合与配比对验证损失的影响是两个不同的计算通道。建立后者时，先将非正份额替换为 $10^{-4}$ 并重新归一，再作中心对数比变换；在 A4、A5 的 512 组 1M 训练配置上，逐验证域拟合
+\begin{equation}
+\operatorname{clr}(\mathbf p)_i=\log p_i-\frac1{17}\sum_{k=1}^{17}\log p_k,\qquad
+\log L_v=b_v+\sum_{i=1}^{17}\beta_{vi}\operatorname{clr}(\mathbf p)_i+\varepsilon_v,\quad v=1,\ldots,13.
+\label{eq:q1_clr}
+\end{equation}
+以 clr--Huber 为可解释的主模型，原始份额 OLS 与 GBDT 为对照。均匀配比附近的局部迁移矩阵为 $T_{iv}=17(\beta_{vi}-\bar\beta_v)$。GBDT 的树数和学习率仅在 A4、A5 内通过五折选参，最终为 1{,}000 棵、学习率 0.12，再在全部训练配置上拟合；它用于检验线性模型是否遗漏非线性，不替代主模型的系数接口。
+
+在 A6、A7 的 1M 留出配置上，clr--Huber、原始份额 OLS、GBDT 的平均逐域 $R^2$ 分别为 0.772、0.654、0.923；GBDT 的等权目标排序 Spearman 为 0.942，线性主模型为 0.523。若以 13 域等权平均 Loss 的 $R^2$ 评价，clr--Huber 为 0.260，原始份额 OLS 为 0.418。因而选用线性主模型是为了保持迁移矩阵、推荐配比与下游接口的一致解释，并不意味着它在所有预测指标上最好。增加 $\sum_i p_i(1-Q_i)$ 作为关联项后，13 个验证域中仅 6 个系数的 bootstrap 区间不含零，方向也不一致；领域质量与训练边际价值的秩相关为 $-0.211$。现有数据不能把这些关联解释为质量的因果效应，也不能用质量排名代替配比实验。
+
+\subsubsection{候选配比、跨尺度检验与适用范围}
+以 A4 平均配比为中心，从四档浓度的 Dirichlet 分布抽取 99{,}996 组候选。为避免线性模型在训练数据之外给出不可信的极低损失，要求候选的 clr 向量到 A4 配比的马氏距离不超过训练距离的第 95 百分位（21.85），且每域份额不超过 A4 的相应最大值；共保留 46{,}168 组。在线性主模型下按 13 域等权预测损失排序，取前 100 组的平均并再次核对信赖域，得到推荐配比 $\mathbf p^*$。由式~\eqref{eq:q1_mix_quality} 计算 $\bar Q(\mathbf p^*)=0.6624116679870492$；线性模型预测的等权损失为 4.875，相对均匀配比的 5.385 降低 9.47\%。固定该候选、重拟合线性模型的 200 次案例 bootstrap 给出收益中位数 9.54\%，95\% 区间 [7.82\%,11.16\%]。这些数值是代理模型预测，尚无按该配比重新训练的实测收益。
+
+在相同信赖域内由 GBDT 独立选择的等权候选与主候选的全变差距离为 0.034；GBDT 评估主候选时也预测约 9.47\% 的收益。这个交叉评估支持候选在两种模型下的相对稳定性，但两者共享 A4、A5 训练数据，不能视为独立训练验证。原有候选配比图对应未加信赖域的旧搜索方案，本轮正文不再引用。
+
+冻结 A4、A5 拟合的 1M 模型后，在 1M 留出、60M、1B 数据上的等权目标排序 Spearman：线性主模型为 0.523、0.467、0.677，选参后的 GBDT 为 0.942、0.905、0.761。直接跨规模预测时，绝对损失误差明显增大。为检验尺度修正，只用 1M 训练数据和 A8、A9 的 60M 数据标定截距漂移与配比效应缩放，保持 1M 系数不变，再以 A10、A11 的 64 组 1B 配置独立检验。在 1B 上，冻结线性模型的平均逐域 MAE 为 2.953；仅修正截距后为 0.770，同时修正截距和配比效应后为 0.771。修正后平均预测损失仍约 2.99，高于观测的 2.226，说明两档规模的外推只能部分校正损失水平。A12--A15 的 10B、70B 表为估算或外推结果，不是实际训练观测；其与尺度修正模型的接近程度也不能作为独立验证。
+
+综上，同一主质量分贯通文档、领域和配比语料，但它缺少人工质量标签；候选配比的收益来自 1M 代理预测，且 1B 绝对损失仍有较大外推误差。后续若获得新的训练配置和质量标注，需要重新检验桥接、配比推荐及跨规模预测。
+
+\subsection{问题二：含质量与配比的广义标度律}
+
+\subsubsection{问题重述}
+
+问题二把经典标度律扩展为同时依赖参数量 $N$、训练 token 数 $D$、数据质量 $Q$ 与领域配比 $\mathbf{p}$ 的损失模型，并完成四项可计算分析：估计各因素的边际效用与弹性；用问题一的迁移结构讨论领域之间的功能替代与覆盖互补；给出“提高质量”与“扩大参数或算力”可以互相替代的条件及数值例子；在附件 B 上完成参数估计、嵌套检验与独立验证，并把冻结参数交给后续问题。附件 A 只通过问题一已经输出的域质量与配比接口进入，本问直接使用的数据是附件 B。
+
+\subsubsection{问题分析}
+
+\textbf{经典基线。}目标是在 B1 上估计 $L_0(N,D)=E+AN^{-\alpha}+BD^{-\beta}$。输入是 8 个 Pythia 模型、共 1{,}176 行的验证损失。难点是 B1 与 Hoffmann 等（2022）的常数几乎重合，宜先审计其生成方式，再决定它能否充当“真实语料且 $Q=1$”的观测。方法上固定幂次网格、对 $E,A,B$ 做线性最小二乘，并用 $C/(6ND)$ 核对算力记账。
+
+\textbf{质量项。}目标是让 $Q$ 进入损失，且 $Q=1$ 时回到 $L_0$。质量网格只出现在 B6、B7、B8，三者均为半合成。难点有三：质量乘在参数项、数据项还是两者之上，不能事先指定；损失随 $Q$ 下降的曲率未知；B8 与 B6/B7 的方向相反。因此在同一 Chinchilla 骨架上比较幂次、指数、线性三种乘子，以及有无地板、$\kappa$ 是否可收缩的嵌套族，用 B6 训练、用 B7 中 B6 没有的点做留出。主式取幂次，是为了把质量写成有效参数与有效数据；线性对照留出误差更小，这一差别在结果中单独报告。
+
+\textbf{两套实验的统一。}附件 A 是固定小规模上的配比实验，附件 B 是规模实验，两边都以交叉熵为观测量，但没有同一批 $(N,D,Q,\mathbf{p})$ 的联合试验。配比只能通过问题一在 1M 上估计的 clr 系数，乘到 B 侧损失的可约部分上。A4/A5 全部位于 1M，训练数据看不出配比斜率如何随 $N$ 变化，所以不估计 $s(N)$，只设两个零新增参数的强度假设，再用 A6--A11 的校准斜率做事后比较。
+
+\textbf{边际、替代与单位算力。}目标函数一旦写成闭式，弹性、等损失曲线和 $6ND=C$ 上的最优参数量都可以解析求出，再用数值解核对。领域关系不从 B 侧回归，因为 B 没有配比列；它来自问题一迁移矩阵行向量的余弦。单位算力比较把提质成本 $g(Q)$ 与扩参数的算力放在同一 FLOP 上，用来回答“多花的一份算力给质量还是给参数”。
+
+\subsubsection{模型假设}
+
+\begin{enumerate}[label=\arabic*.,leftmargin=2.2em]
+\item \textbf{同一观测量。}附件 A 与附件 B 的损失都是验证集交叉熵，因而可以写入同一个 $L$。该假设服务两源统一；检验见 $Q=1$ 切片与 B4、B5 的趋势相关。
+\item \textbf{经典骨架。}$Q=1$ 时损失具有 $E+AN^{-\alpha}+BD^{-\beta}$ 的形式，$\alpha,\beta>0$。该假设服务基线，依据是 B1 的生成公式与题面的退化要求；检验是 B1 的拟合残差和 $C/(6ND)$。
+\item \textbf{退化条件。}$Q=1$ 且 $\mathbf{p}=\mathbf{p}_{\mathrm{ref}}$ 时，质量乘子与配比乘子都等于 1，广义式回到 $L_0$。$\mathbf{p}_{\mathrm{ref}}$ 取问题一的 A4 训练配比均值，作为附件 B 隐含 Pile 配比的代理。该假设服务题面约束；可检验的部分是 $Q=1$ 切片相对 $L_0$ 的残差。
+\item \textbf{质量地板与乘子分工。}质量缺陷留下不随 $N,D$ 消失的加项 $k_0(1-Q)$，$k_0\ge 0$；配比乘子只乘随规模衰减的两项，不乘 $E$ 和地板。该假设服务“规模不能无限弥补质量”以及后文的替代上限；地板是否需要由嵌套 $F$ 检验裁决。
+\item \textbf{质量口径。}主映射取题面语义 $Q_{\mathrm B}=Q_{\mathrm A}=\sum_i p_i Q_i$，当前推荐配比处 $Q_0=\bar q(\mathbf{p}^*)=0.6624$。幂次乘子下，这一映射是假设，不能由“质量惩罚对 $Q$ 仿射”推出。副映射 $Q_{\mathrm B}=Q_{\mathrm A}/Q_0$ 会使部分领域超出 $[0,1]$，只作敏感性，不做静默截断。
+\item \textbf{配比强度不随规模估计。}主假设 H$_{\mathrm{red}}$ 把配比乘在可约损失上，强度 $s_{\mathrm{red}}$ 用 1M 训练集定死；上界 H$_{\mathrm{tot}}$ 把同一偏离乘在总损失上。该假设服务配比通道；A6--A11 只用来看观测斜率落在哪一侧，不回头改参数。
+\end{enumerate}
+
+\subsubsection{符号说明}
+
+表~\ref{tab:q2sym} 只列本问反复使用的符号。$N,D,Q,\mathbf{p}$ 在本问是解释变量；进入问题三后，$N,D,Q$ 成为决策变量。
+
+\begin{table}[htbp]
+\centering\small
+\caption{问题二符号}
+\label{tab:q2sym}
+\begin{tabular}{p{2.5cm}p{8.2cm}p{2.2cm}p{2.2cm}}
+\toprule
+符号 & 含义 & 单位 & 角色 \\
+\midrule
+$N,D$ & 参数量、训练 token 数 & 个 & 解释变量 \\
+$Q,Q_{\mathrm B}$ & 问题一域质量按配比聚合后的语料质量 & 无量纲 & 解释变量 \\
+$\mathbf{p},\mathbf{p}_{\mathrm{ref}}$ & 17 域配比；A4 训练配比均值 & 无量纲 & 解释变量 \\
+$L,L_0$ & 广义损失、经典基线 & nats & 响应 \\
+$E,A,\alpha,B,\beta$ & 经典式参数；$E$ 为不可约损失 & nats，— & 参数，B1 \\
+$\kappa_N,\kappa_D$ & 质量对参数项、数据项的幂次强度 & 无量纲 & 参数，B6 \\
+$k_0$ & 质量地板系数 & nats & 参数，B6 \\
+$h_X(Q)$ & 质量乘子；$Q^{-\kappa_X}$（主），对照为 $e^{\kappa(1-Q)}$ 与 $1+\kappa(1-Q)$ & 无量纲 & 函数 \\
+$T_N,T_D,R$ & $AN^{-\alpha}h_N$、$BD^{-\beta}h_D$ 及其和 & nats & 中间量 \\
+$\varphi,\tilde\varphi$ & 13 个验证域 clr 系数的等权平均，及相对 $\mathbf{p}_{\mathrm{ref}}$ 的偏离 & 无量纲 & 由问题一给定 \\
+$s_{\mathrm{red}}$ & H$_{\mathrm{red}}$ 的配比强度，本问估计为 $1.500$ & 无量纲 & 参数，1M 训练 \\
+$\varepsilon_N,\varepsilon_D,\varepsilon_Q$ & $L$ 对 $N,D,Q$ 的弹性 & 无量纲 & 导出量 \\
+$C$ & 训练算力，$6ND$ 或含上下文与提质后的总预算 & FLOPs & 外生 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{模型建立}
+
+\textbf{对象与基线。}观测是验证交叉熵。B1 上先估计
+\begin{equation}
+L_0(N,D)=E+AN^{-\alpha}+BD^{-\beta}.
+\label{eq:q2l0}
+\end{equation}
+$\alpha,\beta$ 在网格上搜索，$E,A,B$ 对固定幂次线性求解。估计结果为
+$E=1.6901$，$A=406.39$，$\alpha=0.34$，$B=410.59$，$\beta=0.28$。
+
+\textbf{广义式。}在式~\eqref{eq:q2l0} 的可约部分上乘质量与配比，地板留在括号外：
+\begin{equation}
+\begin{aligned}
+L(N,D,Q,\mathbf{p})
+&=E+k_0(1-Q)\\
+&\quad+\bigl[AN^{-\alpha}Q^{-\kappa_N}+BD^{-\beta}Q^{-\kappa_D}\bigr]
+\exp\bigl(s_{\mathrm{red}}\,\tilde\varphi(\mathbf{p})\bigr).
+\end{aligned}
+\label{eq:q2main}
+\end{equation}
+质量口径为
+\begin{equation}
+Q_{\mathrm B}(\mathbf{p})=\sum_{i=1}^{17}p_i Q_i,\qquad Q_0=\bar q(\mathbf{p}^*)=0.6624.
+\label{eq:qmix}
+\end{equation}
+$Q=1$ 且 $\mathbf{p}=\mathbf{p}_{\mathrm{ref}}$ 时，两个乘子都为 1，式~\eqref{eq:q2main} 等于式~\eqref{eq:q2l0}。$N,D\to\infty$ 时 $L\to E+k_0(1-Q)$。有效规模为
+\begin{equation}
+N_{\mathrm{eff}}=N\,Q^{\kappa_N/\alpha},\qquad
+D_{\mathrm{eff}}=D\,Q^{\kappa_D/\beta}.
+\label{eq:q2neff}
+\end{equation}
+质量越低，同样的 $N,D$ 只相当于更小的有效规模。
+
+配比标量来自问题一 1M 的 clr 系数，不在 B 上重估：
+\begin{equation}
+\varphi(\mathbf{p})=\frac1{13}\sum_{v=1}^{13}\boldsymbol\beta_v^{(1\mathrm M)}\cdot\mathrm{clr}(\mathbf{p}),\qquad
+\tilde\varphi(\mathbf{p})=\varphi(\mathbf{p})-\varphi(\mathbf{p}_{\mathrm{ref}}).
+\label{eq:q2phi}
+\end{equation}
+$s_{\mathrm{red}}=c_{\mathrm{train}}/\sigma_{\mathrm{train}}$。$c_{\mathrm{train}}$ 是冻结系数在 1M 训练集上的校准斜率；$\sigma_{\mathrm{train}}$ 是训练损失中、扣掉 $E$ 和地板之后的可约份额。借用 B1 的 $E$ 与 B6 的 $k_0$ 计算这一份额，属于第 6 条假设。H$_{\mathrm{tot}}$ 改为对整个 $L$ 乘 $\exp(c_{\mathrm{train}}\tilde\varphi)$，作为配比效应的上界。
+
+\textbf{候选族。}乘子形状有幂次、指数、线性三种。每种形状下比较：M0 无质量乘子，M1 只乘数据项，M2 只乘参数项，M3 两项共用一个 $\kappa$，M4 两项各自一个 $\kappa$；再交叉“有地板 / 无地板”。M0 与形状无关，合计 26 个候选。主式指定为幂次 M4 加地板。同一数据上，交叉验证规则会优先线性再逐步收缩，该结果记为对照，不替换主式。去掉地板的幂次 M4 用作敏感性。
+
+\textbf{弹性与替代。}记 $T_N=AN^{-\alpha}Q^{-\kappa_N}$，$T_D=BD^{-\beta}Q^{-\kappa_D}$，$R=T_N+T_D$，并令配比乘子暂为 1。则
+\begin{equation}
+\frac{\partial L}{\partial Q}=-\frac{\kappa_N T_N+\kappa_D T_D}{Q}-k_0,\qquad
+\varepsilon_N=-\frac{\alpha T_N}{L},\;
+\varepsilon_D=-\frac{\beta T_D}{L},\;
+\varepsilon_Q=\frac{Q}{L}\frac{\partial L}{\partial Q}.
+\label{eq:q2elas}
+\end{equation}
+固定 $D$，把质量从 $Q$ 提到 $Q'$ 后，若仍想只靠增大 $N$ 把损失拉回，需要
+\begin{equation}
+t=\Bigl(\frac{Q}{Q'}\Bigr)^{\kappa_N}
++\frac{T_D}{T_N}\Biggl[\Bigl(\frac{Q}{Q'}\Bigr)^{\kappa_D}-1\Biggr]
+-\frac{k_0(Q'-Q)}{T_N}>0,
+\label{eq:q2t}
+\end{equation}
+此时 $N'=N\,t^{-1/\alpha}$。$t\le 0$ 时，任何有限参数量都补不回这次质量提升。
+
+在 $6ND=C$ 且配比乘子为 1 时，最优参数量与地板无关：
+\begin{equation}
+N^{*}(C,Q)
+=\Biggl(\frac{\alpha A\,Q^{-\kappa_N}}{\beta B\,Q^{-\kappa_D}}\Biggr)^{1/(\alpha+\beta)}
+\Biggl(\frac{C}{6}\Biggr)^{\beta/(\alpha+\beta)}.
+\label{eq:q2nstar}
+\end{equation}
+$\kappa_N>\kappa_D$ 时，质量越低，$N^{*}$ 越大。沿这条前沿，质量从 $Q$ 提到 $Q'$ 等价于把算力乘以
+\begin{equation}
+M=\Biggl\{\frac{R^{*}(C,Q')-k_0(Q'-Q)}{R^{*}(C,Q)}\Biggr\}^{-1/a},\qquad
+a=\frac{\alpha\beta}{\alpha+\beta},
+\label{eq:q2M}
+\end{equation}
+其中 $R^{*}=L^{*}-E-k_0(1-Q)$。花括号内小于等于 0 时，再大的算力也追不上这次提质。$k_0=0$ 时 $M$ 与 $C$ 无关；$k_0>0$ 时 $M$ 随预算上升。
+
+配比乘子不为 1 时，上述闭式一般不再成立，最优规模需数值求解。领域替代用迁移矩阵的行向量余弦定义：大于 $0.7$ 记为功能替代，小于 $-0.3$ 记为覆盖互补。线性 clr 没有交互项，超可加意义上的互补识别不了。单位算力收益为 $\mathrm{MU}_x=-(\partial L/\partial x)/(\partial C/\partial x)$，总成本
+\[
+C=(6+\eta L_{\mathrm{ctx}})ND+D\bigl[g(Q)-g(Q_0)\bigr]_+,\qquad
+\eta=2\times 10^{-4},\; L_{\mathrm{ctx}}=2048,
+\]
+$g$ 取赛题附录的指数型、幂函数型与对数型。比较的是 $\mathrm{MU}_Q/\mathrm{MU}_N$。
+
+\subsubsection{模型求解}
+
+实现语言为 Python 3.12.7，数值库为 NumPy 1.26.4、pandas 2.2.2、SciPy 1.13.1，脚本为 \texttt{code\_q2/q2\_01\_fit.py}、\texttt{q2\_02\_theory.py}、\texttt{q2\_03\_economics.py}。随机种子 2026。附件 A 的原始表不读入，只读 \texttt{outputs\_q1/interface/}。
+
+基线：$\alpha\in[0.30,0.38]$、$\beta\in[0.24,0.32]$，步长 $0.002$；每个格点上 $E,A,B$ 由线性最小二乘给出，取训练误差最小的格点。质量参数：$\kappa\in[0,1.2]$（线性对照到 $3.0$），初始步长 $0.02$，在最优点两侧加密两轮、步长每次除以 5；$k_0$ 在每个 $\kappa$ 上有非负闭式解。划分：B6 的 360 点用于估计与模型比较；B7 相对 B6 新增的 90 点（全部为 $Q=0.5$ 与 $0.7$，盖住全部 45 个 $(N,D)$ 格）只做留出。交叉验证按参数规模留一。区间用 B1 行重抽样与 B6 的 $(N,D)$ 格簇重抽样，300 次；$\alpha,\beta$ 固定，区间不含形状选择的不确定性。
+
+\subsubsection{结果分析}
+
+\textbf{参数。}主式为幂次 M4 加地板：$\kappa_N=0.142$，$\kappa_D=0.011$，$k_0=0.228$。95\% 区间依次为 $[0.126,0.157]$、$[0.000,0.041]$、$[0.201,0.255]$。$\kappa_N$ 与 $k_0$ 稳定为正；$\kappa_D$ 的区间含 0，数据项上的质量幂次没有被单独识别，式中仍保留它，是因为指定的 M4 给数据项自己的指数。把 $\kappa_D$ 收到 0 的对照（幂次 M2+地板，$\kappa_N=0.142$，$k_0=0.235$）不改变下面的方向性结论。$Q_0=0.6624$ 时，地板使渐近损失比 $E$ 高 $0.077$ nats。
+
+表~\ref{tab:q2form} 给出候选比较。经典式解释不了 B6。加上地板后训练误差下降一个量级。指定的幂次主式，leave-N 交叉验证误差 $0.0598$，留出 RMSE $0.053$；同一规则下交叉验证会选出的线性 M4+地板为 $0.0532$ 与 $0.042$。幂次比线性大约差 $12\%$，这是换取式~\eqref{eq:q2neff} 的代价。去掉地板后，$\kappa_N=0.203$、$\kappa_D=0.153$，留出 RMSE 升到 $0.084$。
+
+\begin{table}[htbp]
+\centering\small
+\caption{质量项候选（B6 训练；主式为指定的幂次 M4+地板）}
+\label{tab:q2form}
+\begin{tabular}{llcccc}
+\toprule
+形状 & 模型 & $\kappa_N,\kappa_D,k_0$ & 留一规模 CV & 留出 RMSE & 留出偏差 \\
+\midrule
+— & M0 & $0,\,0,\,0$ & 0.210 & 0.162 & $-0.146$ \\
+— & M0+地板 & $0,\,0,\,0.363$ & 0.078 & 0.060 & $-0.001$ \\
+幂次 & M4 & $0.203,\,0.153,\,0$ & 0.081 & 0.084 & $-0.070$ \\
+\textbf{幂次} & \textbf{M4+地板（主）} & $\mathbf{0.142,\,0.011,\,0.228}$ & $\mathbf{0.060}$ & $\mathbf{0.053}$ & $\mathbf{-0.022}$ \\
+指数 & M4+地板 & $0.370,\,0.131,\,0.144$ & 0.053 & 0.042 & $-0.005$ \\
+线性 & M4+地板（CV 对照） & $0.430,\,0.139,\,0.142$ & 0.053 & 0.042 & $-0.001$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{参照点上的边际与弹性。}取 $N=10^9$、$D=3\times 10^{11}$、$Q=Q_0$、配比乘子为 1，损失 $L=2.395$。三个弹性为 $\varepsilon_N=-0.053$、$\varepsilon_D=-0.030$、$\varepsilon_Q=-0.086$：质量弹性约为参数弹性的 $1.62$ 倍，其中 $73\%$ 来自地板。各领域配比弹性的绝对值之和只有 $0.007$，远小于质量弹性。规模加大后这一对比更明显。在 $(10^{10},10^{12})$ 与 $(7\times 10^{10},2\times 10^{12})$ 处、$Q=0.9$ 时，$\varepsilon_Q/\varepsilon_N$ 为 $4.13$ 与 $7.60$，地板占 $|\partial L/\partial Q|$ 的 $89\%$ 与 $94\%$。无地板时，同样三处的弹性比降到约 $0.91$、$1.09$、$1.39$，质量相对参数的优势主要来自地板。因此“大模型上质量更敏感”依赖半合成数据里的地板项，外推时按假设使用。
+
+\textbf{提质与扩规模的替代。}式~\eqref{eq:q2t} 在表~\ref{tab:q2sub} 的格子上全部大于 0。固定 $D=3\times 10^{11}$，质量提高 $0.1$：十亿参数附近须把参数扩大为原来的 $1.30$ 倍，千亿参数附近须扩大为原来的约 $3$ 倍。模型越大，同样的 $0.1$ 越难用堆参数补上，因为地板在损失中的份额上升，而地板只能靠提质消掉。无地板时，千亿参数处的倍数降到 $1.3$--$1.5$。$\kappa_D=0$ 的对照在十亿参数处仍是 $1.30/1.29/1.28$，与主式几乎相同。
+
+\begin{table}[htbp]
+\centering\small
+\caption{质量 $+0.1$ 的等效参数倍数（$D=3\times 10^{11}$；括号内为无地板）}
+\label{tab:q2sub}
+\begin{tabular}{lccc}
+\toprule
+起点 $Q$ & $N=10^9$ & $N=10^{10}$ & $N=10^{11}$ \\
+\midrule
+0.5 & 1.30（1.18） & 1.65（1.27） & 3.00（1.49） \\
+0.7 & 1.28（1.13） & 1.64（1.19） & 3.07（1.34） \\
+0.9 & 1.27（1.10） & 1.64（1.15） & 3.14（1.26） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+沿 $6ND=C$ 的最优前沿，质量从 $0.7$ 提到 $0.8$ 相当于算力乘 $1.19$（$C=10^{19}$）、$1.49$（$10^{22}$）、$2.13$（$10^{24}$）。无地板时该倍数恒为 $1.16$，与预算无关。有地板时，预算越大，同样的提质越“值钱”。可替代的算力上限约 $3\times 10^{30}$ FLOPs，超出本题考察范围；超过该上限后 $t$ 的算力版本不再为正。$Q=0.5$ 时的 $N^{*}$ 比 $Q=1$ 大 $15.7\%$（$\kappa_D=0$ 时为 $17.3\%$），该比例与 $C$ 无关。$C=10^{24}$、$Q=0.5$ 时，地板占可约损失的 $33\%$。
+
+\textbf{单位算力。}表~\ref{tab:q2mu} 是 $Q=Q_0$、$L_{\mathrm{ctx}}=2048$ 时 $\mathrm{MU}_Q/\mathrm{MU}_N$。大于 1 表示把一份 FLOP 用于提质，比用于增加参数下降更多损失。$C=10^{19}$ 时，指数型与幂函数型小于 1，应优先扩参数；对数型略大于 1。$C\ge 10^{20}$ 后三种成本都是提质更划算，而且比值随预算迅速增大。无地板时 $C=10^{24}$ 的比值约为表中主式的四分之一，方向不变。低预算结论对 $g(Q)$ 敏感，高预算结论对成本函数不敏感。
+
+\begin{table}[htbp]
+\centering\small
+\caption{$\mathrm{MU}_Q/\mathrm{MU}_N$（$Q=Q_0$；括号内为无地板）}
+\label{tab:q2mu}
+\begin{tabular}{lccc}
+\toprule
+预算 $C$ & 指数型 & 幂函数型 & 对数型 \\
+\midrule
+$10^{19}$ & 0.87（0.79） & 0.48（0.44） & 1.06（0.97） \\
+$10^{22}$ & 42.5（18.0） & 23.3（9.9） & 51.7（21.9） \\
+$10^{24}$ & 627（144） & 345（79） & 764（175） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{配比与领域。}$c_{\mathrm{train}}=1.004$，$s_{\mathrm{red}}=1.500$，$\tilde\varphi(\mathbf{p}^*)=-0.071$，故推荐配比相对 $\mathbf{p}_{\mathrm{ref}}$ 的可约损失乘子约为 $0.90$。在参照点上，把份额拨向 \texttt{dm\_mathematics} 使等权损失下降最快（$\partial L/\partial p_i=-0.147$），拨向 \texttt{enron\_emails} 上升最快（$+0.138$）。17 个域的行向量中，功能替代 4 对，最强是 \texttt{nih\_exporter} 与 \texttt{enron\_emails}（余弦 $0.97$）；覆盖互补 10 对，最强是 \texttt{dm\_mathematics} 与 \texttt{philpapers}（$-0.72$）。这是“增配后在各验证域上的梯度方向是否同号”，不是两个域同时加量的交互。
+
+跨尺度上，冻结 1M 系数的观测校准斜率在 60M 为 $0.913$、在 1B 为 $0.612$，分别落在 H$_{\mathrm{red}}$ 预测（$0.807$、$0.309$）与 H$_{\mathrm{tot}}$ 预测（均为 $1.004$）之间，相对位置 $0.54$ 与 $0.44$。下游把二者当作配比效应的下界与上界，而不把 $1.500$ 外推成随规模上升的函数。
+
+\subsubsection{模型检验}
+
+检验与拟合分开。质量参数只用 B6；下面的留出、外源和解析对照都不再改 $\kappa$ 与 $k_0$。
+
+\textbf{留出与嵌套。}B7 新增 90 点的 RMSE 为 $0.053$，平均残差约 $+0.022$（$Q=0.5$ 为 $+0.024$，$Q=0.7$ 为 $+0.020$）。格内对 $Q$ 做二次拟合的残差标准差中位数（噪声代理）为 $0.046$，留出误差高于噪声，也高于线性对照的 $0.042$。按规模分组时，70M 的 RMSE 最大（$0.086$），中等规模约 $0.03$--$0.04$。全 B7 重拟合得到 $\kappa_N=0.142$、$\kappa_D=0.006$、$k_0=0.238$，与训练结果同向。幂次 M4 加地板的 $F=307$（$p<10^{-15}$）。$\kappa_D=0$ 的收缩检验 $F=0.63$（$p=0.43$），与区间含 0 一致；$\kappa_N=\kappa_D$ 被拒绝（$F=57$，$p<10^{-12}$）。主式再加 $(1-Q)^2$，系数 $-0.0095$（$p=0.195$），没有额外曲率。$Q=1$ 的 45 个点相对 $L_0$ 的平均残差为 $+0.0036$，95\% 区间 $[-0.012,+0.019]$，退化条件在这张切片上成立。损失从 $Q=0.1$ 到 $Q=1$ 的降幅与 $\ln N$ 的相关为 $-0.77$，与 $\ln D$ 的相关为 $-0.28$：质量收益主要随参数规模变小，与 $\kappa_N>\kappa_D$ 一致。
+
+\textbf{换数据。}这些比较都在 $Q=1$ 上进行，检验的是基线趋势，不能证明质量项可以搬到真实训练。B2（半合成）Spearman $0.79$、平均偏差 $+1.18$，只说明排序大致同向、水平不可比。B3 由 B1 插值而来，相关接近 1，不构成独立验证。B4 全部 57 点 Spearman $0.98$、偏差 $+0.22$；其中 13 点在对数尺度上距 B1 小于 $0.05$ dex，去掉后 44 点仍为 $0.98$ 与 $+0.18$。B5 文献点 Spearman $0.96$、偏差 $+0.02$。B10 本身是公式估算，RMSE $0.0012$，只能核对实现。B9 的 128 个有效百亿级模型上，$Q_0$ 相对 $Q=1$ 的损失缺口中位数为 $0.081$，占 $Q=1$ 可约损失的 $37\%$，其中 $95\%$ 来自地板。B8 在最低质量档的平均损失为 $0.545$、$Q=1$ 时为 $2.307$，且 $64\%$ 的点低于 $E$，与 B6/B7 方向相反，未进入拟合。
+
+\textbf{来源审计与解析互验。}B1 的 8 个名义规模都能在 B12 找到，每个 154 个检查点，B1 的 147 个步数全部被覆盖，$D/(\mathrm{steps}\times\mathrm{batch})$ 的中位比为 $0.9986$，8 个模型都在 B11 中。因而 B1 的训练设定是真实的，损失数值则是按公开公式生成的。B11 只含 pythia、cerebras\_gpt、olmo 三族，B4 的 12 族里只覆盖 $8.3\%$。式~\eqref{eq:q2t}、式~\eqref{eq:q2nstar} 与式~\eqref{eq:q2M} 的解析值相对数值解的误差小于 $10^{-8}$（替代倍数小于 $10^{-13}$）。配比乘子不为 1 时不使用这些闭式。
+
+\subsubsection{评价与改进}
+
+式~\eqref{eq:q2main} 同时含有 $N,D,Q,\mathbf{p}$，在 $Q=1$、$\mathbf{p}=\mathbf{p}_{\mathrm{ref}}$ 时回到经典式，并把“提质能否被规模替代”写成 $t>0$ 这一可计算条件。地板、留出和跨源趋势都有单独的检验，半合成与估算数据没有被写成实验观测。
+
+局限也明确。质量参数只来自最大约 12B 的半合成网格；$C=10^{24}$ 上“地板占可约损失 $33\%$”“提质远比扩参数划算”是把该地板外推出去的结果，应作为假设下的推论。幂次是为有效规模解释而指定的，线性与指数的留出误差更小，外推到 $Q<0.1$ 时三种形状会分开。$\kappa_D$ 未被识别。$\mathbf{p}_{\mathrm{ref}}$ 等于 Pile 配比、用 B1 的 $E$ 和 B6 的 $k_0$ 计算 RegMix 可约份额、以及 $Q_{\mathrm B}=\bar q(\mathbf{p})$，都不能由本题数据单独证实。60M 与 1B 的配比斜率落在两个假设中间，恒定强度只是下界。
+
+可做的修正是：若后续有真实的跨质量训练日志，用它替换 B6 重估 $k_0$ 与 $\kappa_N$，并允许 $s$ 随 $\log N$ 变化；在得到真正的跨尺度配比试验之前，问题三应对 H$_{\mathrm{red}}$ 与 H$_{\mathrm{tot}}$ 各算一遍。问题三、问题四若仍按线性乘子 $1+\kappa(1-Q)$ 读取 $\kappa_N,\kappa_D$，会用错形状，需要按 $Q^{-\kappa}$ 重算后再引用本问接口。
+
+
+\subsection{问题三的模型建立与求解}
+按实际问题补充模型、求解过程与结果。赛题包含更多问题时，保持同样的标题层级。

@@ -26,8 +26,10 @@ from q4_04_decomp import (build_panel, frontier_state, fit_add, fit_eff, f_add, 
 from q4_00_common import ROOT
 
 RNG = np.random.default_rng(11)
-T0 = 2025.25                       # 数据截止（C2 最晚发布 2025-03 前后）
-HORIZONS = (1.0, 2.0)              # 12 / 24 个月
+T0 = 2025.25                       # 数据截止（C2 最晚发布 2025-03 前后）；模型在此锚定
+T_NOW = 2026.75                    # "现在"=2026-09（竞赛时间）；距数据截止约 1.5 年，本身为模型外推
+DT = T_NOW - T0                    # 1.5 年
+HORIZONS = (2.5, 3.5)              # 距数据锚点 2.5/3.5 年 ⇒ 2027-09 / 2028-09（自 2026-09 起 12/24 个月）
 SCEN = {"基线 0.60 dex/yr": 0.60, "减半 0.30 dex/yr": 0.30, "1/4 0.15 dex/yr": 0.15}
 LCTX = 4096
 KAPPA = 6 + ETA * LCTX
@@ -129,7 +131,7 @@ if __name__ == "__main__":
                 x, s_, t_ = simulate(st, g, h, J, P2D, noise=noise, G=G, posttrain=pt)
                 sims[(sname, h, grp, pt)] = x
                 q = qs(x)
-                rows.append(dict(scenario=sname, g_dex_per_yr=g, horizon_months=int(h * 12), date=T0 + h,
+                rows.append(dict(scenario=sname, g_dex_per_yr=g, horizon_months=int((h - DT) * 12), date=T0 + h,
                                  group=grp, posttrain=pt, S_anchor=st["S"], lc_path=st["lc"] + g * h,
                                  **q, mean=x.mean(), scale_part_p50=np.median(s_), tech_part_p50=np.median(t_),
                                  tech_share_p50=np.median(t_) / (np.median(s_) + np.median(t_))))
@@ -151,7 +153,7 @@ if __name__ == "__main__":
     pm, pc = J["M1b"], J["M1c"]
     caps = dict(M1b_scale_ceiling_at_T0=pm["lo"] + pm["amp"] + pm["tau"] * (sb["t"] - T_REF),
                 M1c_ceiling=pc["lo"] + pc["amp"],
-                infinite_compute_24m_M1b=sb["S"] + delta_S("M1b", pm, sb["L"], sb["t"], PAR["E"] + 0.0, sb["t"] + 2),
+                infinite_compute_24m_M1b=sb["S"] + delta_S("M1b", pm, sb["L"], sb["t"], PAR["E"] + 0.0, sb["t"] + DT + 2),
                 bridge_C6_hi=json.load(open(f"{IFACE}/P4_bridge_params.json"))["params"]["base|Average"][1])
     print("上界:", {k: round(v, 2) for k, v in caps.items()})
 
@@ -201,7 +203,7 @@ if __name__ == "__main__":
     FC.to_csv(f"{IFACE}/P4_frontier_forecast.csv", index=False, encoding="utf-8-sig")
     FORM.to_csv(f"{TAB}/T8_forecast_by_techform.csv", index=False, encoding="utf-8-sig")
     BT.to_csv(f"{TAB}/T8_backtest.csv", index=False, encoding="utf-8-sig")
-    json.dump(dict(T0=T0, kappa=KAPPA, L_ctx=LCTX, anchor_base=sb, anchor_chat=sc_, noise_sd=noise,
+    json.dump(dict(T0=T0, T_NOW=T_NOW, DT=DT, kappa=KAPPA, L_ctx=LCTX, anchor_base=sb, anchor_chat=sc_, noise_sd=noise,
                    caps=caps, g_actual_backtest=g_act, compute_slopes=sl,
                    backtest_fit=dict(M1b=pb_tr, M1c=pc_tr)),
               open(f"{TAB}/T8_forecast_meta.json", "w"), ensure_ascii=False, indent=1, default=float)
@@ -224,8 +226,8 @@ if __name__ == "__main__":
             ax.axhline(caps["M1b_scale_ceiling_at_T0"], color="gray", ls=":", lw=1)
             ax.text(2023.05, caps["M1b_scale_ceiling_at_T0"] + .6, "纯规模天花板（M1b，t=T0）", fontsize=7)
         else:
-            q = qs(sims[("基线 0.60 dex/yr", 2.0, "chat", "plateau")])
-            ax.errorbar(T0 + 2.05, q["p50"], yerr=[[q["p50"] - q["p05"]], [q["p95"] - q["p50"]]], fmt="s",
+            q = qs(sims[("基线 0.60 dex/yr", 3.5, "chat", "plateau")])
+            ax.errorbar(T0 + 3.55, q["p50"], yerr=[[q["p50"] - q["p05"]], [q["p95"] - q["p50"]]], fmt="s",
                         color="purple", capsize=3, label="基线·后训练增益停滞")
         ax.set_xlabel("时间（发布日）"); ax.set_ylabel("Average"); ax.legend(fontsize=7, loc="upper left")
         ax.set_title(f"{grp} 开源前沿预测（中位数，50%/90% 区间）")

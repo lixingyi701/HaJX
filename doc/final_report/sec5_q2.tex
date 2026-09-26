@@ -24,7 +24,7 @@
 2. \textbf{经典骨架。} $Q=1$ 时损失具有 $E+AN^{-\alpha}+BD^{-\beta}$ 的形式，$\alpha,\beta>0$。该假设服务基线，依据是 B1 的生成公式与题面的退化要求；检验是 B1 的拟合残差和 $C/(6ND)$。
 3. \textbf{退化条件。} $Q=1$ 且 $\bp=\bp_{\rm ref}$ 时，质量乘子与配比乘子都等于 1，广义式回到 $L_0$。$\bp_{\rm ref}$ 取问题一的 A4 训练配比均值，作为附件 B 隐含 Pile 配比的代理。该假设服务题面约束；可检验的部分是 $Q=1$ 切片相对 $L_0$ 的残差。
 4. \textbf{质量地板与乘子分工。} 质量缺陷留下不随 $N,D$ 消失的加项 $k_0(1-Q)$，$k_0\ge0$；配比乘子只乘随规模衰减的两项，不乘 $E$ 和地板。该假设服务「规模不能无限弥补质量」以及后文的替代上限；地板是否需要由嵌套 $F$ 检验裁决。
-5. \textbf{质量口径。} 主映射取题面语义 $Q_{\rm B}=Q_{\rm A}=\sum_i p_iQ_i$，当前推荐配比处 $Q_0=\bar q(\bp^*)=0.6624116679870492$。幂次乘子下，这一映射是假设，不能由「质量惩罚对 $Q$ 仿射」推出。副映射 $Q_{\rm B}=Q_{\rm A}/Q_0$ 会使部分领域超出 $[0,1]$，只作敏感性，不做静默截断。
+5. \textbf{质量口径。} 主映射取题面语义 $Q_{\rm B}=Q_{\rm A}=\sum_i p_iQ_i$，当前推荐配比处 $Q_0=\bar q(\bp^*)=0.6623836418229694$。幂次乘子下，这一映射是假设，不能由「质量惩罚对 $Q$ 仿射」推出。副映射 $Q_{\rm B}=Q_{\rm A}/Q_0$ 会使部分领域超出 $[0,1]$，只作敏感性，不做静默截断。
 6. \textbf{配比强度不随规模估计。} 主假设 H$_{\rm red}$ 把配比乘在可约损失上，强度 $s_{\rm red}$ 用 1M 训练集定死；上界 H$_{\rm tot}$ 把同一偏离乘在总损失上。该假设服务配比通道；A6–A11 只用来看观测斜率落在哪一侧，不回头改参数。
 
 \subsubsection{符号说明}
@@ -209,7 +209,7 @@ $10^{24}$ & 627.30（143.65） & 344.59（78.91） & 763.61（174.87） \\
 
 领域关系：按迁移矩阵行向量余弦，17 个域对中功能替代 4 对（最强 nih\_exporter–enron\_emails，余弦 $0.969$）、覆盖互补 10 对（最强 dm\_mathematics–philpapers，$-0.725$）、其余 122 对为弱相关（\texttt{T32b\_domain\_pair\_relation.csv}）。在 $N=10^9$、$D=3\times10^{11}$、$Q=Q_0$ 下，把份额拨向 dm\_mathematics 使等权损失下降最快（$\partial L/\partial p_i=-0.1475$），拨向 enron\_emails 上升最快（$+0.1381$）（\texttt{T31b\_p\_marginal\_by\_domain.csv}）。这是"增配后在各验证域上的梯度方向是否同号"，\textbf{不是两个域同时加量的交互效应}；线性 clr 模型无交互项，超可加意义的互补不可识别。
 
-\textbf{配比通道的证据位置。} 配比通道的参数为 $c_{\rm train}=1.0039$、$Q_{\rm ref}=0.6640$、地板扣除 $0.0766$、$\sigma_{\rm train}=0.6694$，故 $s_{\rm red}=1.4996207320397785$；$\tilde\varphi(\bp^*)=-0.07104$、$\tilde\varphi(\text{均匀})=+0.03611$，推荐配比处的配比乘子为 $\exp(s_{\rm red}\tilde\varphi(\bp^*))\approx0.89894$，即配比效应使可约损失约为参照配比的 $90\%$（\texttt{T28\_p\_channel.csv}、\texttt{interface/P2\_scaling\_law.json} 的 \texttt{p\_channel}）。
+\textbf{配比通道的证据位置。} 配比通道的参数为 $c_{\rm train}=1.0039$、$Q_{\rm ref}=0.6640$、地板扣除 $0.0766$、$\sigma_{\rm train}=0.6694$，故 $s_{\rm red}=1.4996241893440818$；$\tilde\varphi(\bp^*)=-0.07104$、$\tilde\varphi(\text{均匀})=+0.03611$，推荐配比处的配比乘子为 $\exp(s_{\rm red}\tilde\varphi(\bp^*))\approx0.89894$，即配比效应使可约损失约为参照配比的 $90\%$（\texttt{T28\_p\_channel.csv}、\texttt{interface/P2\_scaling\_law.json} 的 \texttt{p\_channel}）。
 
 \begin{table}[H]
 \centering\small

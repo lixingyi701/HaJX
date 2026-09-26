@@ -269,6 +269,8 @@ def write_manifest(output_names):
         search_log10N=[1.0, 17.0], share_denominator="实际总消耗",
         evidence="B6 半合成幂次主式；配比通道为探索性；高预算为外推",
         inputs={k: sha(v) for k, v in inputs.items() if os.path.isfile(v)},
+        inputs_sha256={os.path.relpath(v, repo): sha(v) for k, v in inputs.items()
+                       if os.path.isfile(v)},
         outputs={name: sha(f"{IFACE}/{name}") for name in output_names
                  if os.path.isfile(f"{IFACE}/{name}")},
     )

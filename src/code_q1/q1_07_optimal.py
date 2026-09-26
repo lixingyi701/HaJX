@@ -108,8 +108,8 @@ if __name__ == "__main__":
     print(bench.round(4).to_string(index=False))
 
     # bootstrap：固定线性 p* 的收益区间（系数不确定性；选择与评估同源，偏乐观）；
-    # 每次在同一信赖域内重选 p*，记录与主 p* 的全变差（选择稳定性）
-    gains, tvs = [], []
+    # 每次在同一信赖域内重选 p*，记录与主 p* 的全变差（选择稳定性）及重选后的 p* 向量（供 Q3 传播不确定性）
+    gains, tvs, pstar_boot = [], [], []
     from q1_00_common import huber_regression
     z_fixed = clr(np.vstack([p_star_eq, p_uniform]))
     for _ in range(200):
@@ -117,8 +117,11 @@ if __name__ == "__main__":
         Bb = np.stack([huber_regression(Z_tr[idx], lnY_tr[idx, v]) for v in range(13)])
         pred = np.exp(predict_all(Bb, z_fixed)) @ w_eval
         gains.append((1 - pred[0] / pred[1]) * 100)
-        tvs.append(tv(topk_avg(Pm, np.exp(predict_all(Bb, Zm)) @ w_eval), p_star_eq))
+        p_resel = topk_avg(Pm, np.exp(predict_all(Bb, Zm)) @ w_eval)
+        tvs.append(tv(p_resel, p_star_eq))
+        pstar_boot.append(p_resel)
     gains, tvs = np.array(gains), np.array(tvs)
+    pstar_boot = np.array(pstar_boot)
     print(f"p* 相对均匀配比收益（线性 bootstrap）: {np.median(gains):.2f}% "
           f"[{np.quantile(gains, .025):.2f}, {np.quantile(gains, .975):.2f}] (95% CI)；"
           f"重选 p* 全变差中位数 {np.median(tvs):.3f}，P95 {np.quantile(tvs, .95):.3f}")
@@ -128,6 +131,13 @@ if __name__ == "__main__":
                "TV_reselect_median": float(np.median(tvs)),
                "TV_reselect_p95": float(np.quantile(tvs, .95))}).to_csv(
         f"{TABLES}/T7_gain_ci.csv")
+
+    # 逐次重抽样接口：200 次重选 p* 的 17 域向量（供 Q3 把 Q0(p*) 不确定性传播到临界预算）
+    pd.DataFrame(pstar_boot, columns=DOM17).to_csv(f"{IFACE}/P1_pstar_bootstrap.csv", index=False)
+    Q0_boot = (pstar_boot * Qd).sum(axis=1)
+    print(f"p* bootstrap 样本已导出：{pstar_boot.shape[0]}×{pstar_boot.shape[1]}，"
+          f"Q0(p*) 均值 {Q0_boot.mean():.6f}，"
+          f"5–95% [{np.percentile(Q0_boot, 5):.6f}, {np.percentile(Q0_boot, 95):.6f}]")
 
     # ---- ③ 接口 P1-p* ----
     Qbar_eq = float((p_star_eq * Qd).sum())

@@ -1,11 +1,11 @@
 {
-  "time_beijing": "2026-09-26T11:37:00+08:00",
-  "git_commit": "8f0f9e674cb24dce068301d94c33b237294301d6",
+  "time_beijing": "2026-09-26T17:16:49+08:00",
+  "git_commit": "3b84954fab32d2e2f862f4e4e5f40883531bd446",
   "q_shape": "pow",
   "selected_model": "M4+F",
   "floor": true,
-  "Q0_main": 0.6624116679870492,
-  "m": 0.8989423151944644,
+  "Q0_main": 0.6623836418229694,
+  "m": 0.8989420944011046,
   "h_tot_scale": 0.9311640044387456,
   "m_source": "exp(s_red·φ̃(p*))，只乘随规模下降的两项；地板 k0(1-Q) 在括号外",
   "search_log10N": [
@@ -15,15 +15,22 @@
   "share_denominator": "实际总消耗",
   "evidence": "B6 半合成幂次主式；配比通道为探索性；高预算为外推",
   "inputs": {
-    "P1_summary": "0f251c2d2fa75f39f07056a349545803dbfc8e31c27564ca2f2d4b697ea7648e",
-    "P2_scaling_law": "f1182ed5c1e20ae73e52cca21e5ea35a1dada4013e43e66a98f7d487ad66e515",
-    "P2_bootstrap": "0050cba55e53976c500595ac8c8c08dcbeb9564fb91a67b28975453fa32ecf6d",
-    "P1_Q_domain": "d0ca7cfcd0e5083368ced505074baa60773bbf0ea6c88436d15024ce2353d378",
+    "P1_summary": "f068e30a2a6c8d7a8254d6a68f4730037d8354cc564690170225b2fae4ff820c",
+    "P2_scaling_law": "2acc4a7ec2bc2e6e39860ed7a0e6d5faae8bb85708315a40a812d2176b6ef247",
+    "P2_bootstrap": "3a7711fbdd8c8a3ecdf918f9c24b080fe2101f0639a01ae3d62f01ff974866a9",
+    "P1_Q_domain": "fec5b5bc4de4252e8bfb8ae1989928d13de61142b36b5236c8f9c9fc2f17f62b",
     "C7": "ee24622cb3a6334f08d72c9ea373be26d5e5585bb266367c5f66d77499112ffc"
   },
+  "inputs_sha256": {
+    "src/outputs_q1/interface/P1_summary.json": "f068e30a2a6c8d7a8254d6a68f4730037d8354cc564690170225b2fae4ff820c",
+    "src/outputs_q2/interface/P2_scaling_law.json": "2acc4a7ec2bc2e6e39860ed7a0e6d5faae8bb85708315a40a812d2176b6ef247",
+    "src/outputs_q2/interface/P2_bootstrap.npz": "3a7711fbdd8c8a3ecdf918f9c24b080fe2101f0639a01ae3d62f01ff974866a9",
+    "src/outputs_q1/interface/P1_Q_domain.csv": "fec5b5bc4de4252e8bfb8ae1989928d13de61142b36b5236c8f9c9fc2f17f62b",
+    "附件/C_efficiency_evolution/model_architecture_metadata.csv": "ee24622cb3a6334f08d72c9ea373be26d5e5585bb266367c5f66d77499112ffc"
+  },
   "outputs": {
-    "P3_optimal_config.csv": "e0c0f525edededbef0604a8838b4d67fa8e8af0398a8e4ee7f44a7058f081d0f",
-    "P3_sensitivity_Lctx.csv": "035589ca985b5c252931b24e47730a41b64bba36bf8c156c31d355193eba1460",
-    "P3_structural_transition.json": "6b77da4f5e8eb0a1708571f3a1e60c411e41f56890d333d3925eec522a5c1124"
+    "P3_optimal_config.csv": "7da621d2b2a93266a26fa2dc3552119074dfc98acee67fe443fed8b099cad04f",
+    "P3_sensitivity_Lctx.csv": "e472a15bbcce4794a28f4bc725bf318d8196d06fa082087771ab52a2be31112a",
+    "P3_structural_transition.json": "cdee84b4e2afa75f78a113cfab3a74f8aef8fd8dc4d1f403e3c66ac14e4e364c"
   }
 }
