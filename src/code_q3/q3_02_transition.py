@@ -5,8 +5,9 @@ q3_02_transition.py — 问题三·Step5/7：结构性转移的定义、识别�
 【定义】记 x*(C) = (N*,D*,Q*) 为预算 C 下的最优解，称 C_crit 处发生结构性转移，若：
   口径 A（KKT 活跃约束集切换，主定义）：
       𝒜(C) = { Q≥Q0 活跃 | 无约束活跃(内点) | Q≤1 活跃 } 在 C_crit 两侧不同。
-      解析识别：Φ(C) = [(κ_N A N^-α+κ_D B D^-β+k0)(κN+Δg)] / [βB D^-β g'(Q)] 在 Q=Q0 处穿越 1。
-      （Φ = 提质边际收益 / 提质挤占数据的边际损失；Φ<1 ⇒ 不提质是 KKT 点）
+      局部识别：在固定质量并优化规模后，Φ(C;Q)=1。Φ 用幂次损失
+      （含 m*、地板和 Q^{-κ}）计算，只表示贴着该质量再抬一点是否打平。
+      全局切换以最优解的质量状态变化为准，二者分开记录。
   口径 B（份额弹性符号翻转）：e_Q(C) = d ln s_Q / d ln C 由正变负（s_Q 取极大）。
   口径 C（配置比斜率拐点）：固定 Q 时 D*/N* ∝ C^{(α-β)/(α+β)}（常斜率 0.0968）；
       偏差 δ(C) = d ln(D/N)/d ln C − (α−β)/(α+β) 取极值处即转移。
@@ -19,7 +20,7 @@ import numpy as np
 import pandas as pd
 from q3_00_model import (PAR, ETA, LCTX_CRIT, Q0_MAIN, Q0_WEB, G_LIST, LCTX_C7, TAB, FIG,
                          IFACE, ROOT, loss, solve, c_crit, phi_ratio, N_star_closed,
-                         setup_cjk_matplotlib)
+                         write_manifest, setup_cjk_matplotlib)
 
 Q0S = {"主口径p*加权": Q0_MAIN, "副口径网页pile_cc": Q0_WEB}
 SLOPE0 = (PAR["al"] - PAR["be"]) / (PAR["al"] + PAR["be"])
@@ -176,7 +177,7 @@ if __name__ == "__main__":
     def finite_or_none(x):
         return round(float(x), 3) if np.isfinite(x) else None
     J = dict(definition=dict(
-        A="KKT 活跃约束集切换：Q*=Q0 角点 → 内点 → Q*=1 角点；解析判据 Φ(C)=1",
+        A="全局最优的质量状态在 LOWER/INTERIOR/UPPER 之间切换。phi_analytic 是局部 Φ=1 的根，leave_Q0 是数值最优解真正离开下界的预算，二者不必相同。",
         B="提质份额弹性 d ln s_Q / d ln C 由正转负（s_Q 极大）",
         C="配置比斜率 d ln(D*/N*)/d ln C 偏离固定质量基准 (α-β)/(α+β)=%.4f 的极值点" % SLOPE0),
         L_ctx_crit=LCTX_CRIT,
@@ -219,7 +220,7 @@ if __name__ == "__main__":
     axes[2].set_xlabel("log₁₀ C"); axes[2].set_ylabel("d ln(D*/N*) / d ln C")
     axes[2].set_title("口径C：配置比斜率偏离基准"); axes[2].legend(fontsize=8)
     axes[2].set_ylim(-1.5, 1.5)
-    fig.suptitle("图5  结构性转移的三种识别口径（副口径 Q₀=0.889，L_ctx=2048）")
+    fig.suptitle(f"图5  结构性转移的三种识别口径（网页域对照 Q₀={Q0_WEB:.3f}，L_ctx=2048）")
     fig.tight_layout(); fig.savefig(f"{FIG}/F5_three_criteria.png"); plt.close(fig)
 
     # F6：Q0 相图
@@ -256,4 +257,6 @@ if __name__ == "__main__":
     axes[1].set_title("问题二参数不确定性下的临界预算")
     fig.suptitle("图7  临界预算的敏感性")
     fig.tight_layout(); fig.savefig(f"{FIG}/F7_ccrit_sensitivity.png"); plt.close(fig)
+    write_manifest(["P3_optimal_config.csv", "P3_sensitivity_Lctx.csv",
+                    "P3_structural_transition.json"])
     print("done")

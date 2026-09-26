@@ -1,97 +1,121 @@
 {
   "definition": {
-    "A": "KKT 活跃约束集切换：Q*=Q0 角点 → 内点 → Q*=1 角点；解析判据 Φ(C)=1",
+    "A": "全局最优的质量状态在 LOWER/INTERIOR/UPPER 之间切换。phi_analytic 是局部 Φ=1 的根，leave_Q0 是数值最优解真正离开下界的预算，二者不必相同。",
     "B": "提质份额弹性 d ln s_Q / d ln C 由正转负（s_Q 极大）",
     "C": "配置比斜率 d ln(D*/N*)/d ln C 偏离固定质量基准 (α-β)/(α+β)=0.0968 的极值点"
   },
   "L_ctx_crit": 30000.0,
   "C_crit_Lctx2048": {
     "主口径p*加权|指数型": {
-      "leave_Q0": 18.874,
-      "reach_Q1": 20.168,
-      "phi_analytic": 18.833,
-      "sQ_peak": 20.15,
-      "DN_kink": 18.95
+      "leave_Q0": 19.059,
+      "leave_status": "FOUND",
+      "reach_Q1": 20.355,
+      "full_status": "FOUND",
+      "phi_analytic": 19.059,
+      "sQ_peak": 20.35,
+      "DN_kink": 19.1
     },
     "主口径p*加权|幂函数型": {
-      "leave_Q0": 19.399,
-      "reach_Q1": 19.845,
-      "phi_analytic": 19.358,
-      "sQ_peak": 19.85,
-      "DN_kink": 19.45
+      "leave_Q0": 19.529,
+      "leave_status": "FOUND",
+      "reach_Q1": 20.106,
+      "full_status": "FOUND",
+      "phi_analytic": 19.529,
+      "sQ_peak": 20.1,
+      "DN_kink": 19.6
     },
     "主口径p*加权|对数型": {
-      "leave_Q0": 18.166,
-      "reach_Q1": 18.166,
-      "phi_analytic": 18.669,
-      "sQ_peak": 18.2,
-      "DN_kink": 18.15
+      "leave_Q0": 18.579,
+      "leave_status": "FOUND",
+      "reach_Q1": 18.579,
+      "full_status": "FOUND",
+      "phi_analytic": 18.904,
+      "sQ_peak": 18.6,
+      "DN_kink": 18.55
     },
     "副口径网页pile_cc|指数型": {
-      "leave_Q0": 18.956,
-      "reach_Q1": 20.174,
-      "phi_analytic": 18.916,
-      "sQ_peak": 20.15,
-      "DN_kink": 19.0
+      "leave_Q0": 19.132,
+      "leave_status": "FOUND",
+      "reach_Q1": 20.36,
+      "full_status": "FOUND",
+      "phi_analytic": 19.132,
+      "sQ_peak": 20.35,
+      "DN_kink": 19.2
     },
     "副口径网页pile_cc|幂函数型": {
-      "leave_Q0": 19.46,
-      "reach_Q1": 19.858,
-      "phi_analytic": 19.421,
-      "sQ_peak": 19.85,
-      "DN_kink": 19.5
+      "leave_Q0": 19.585,
+      "leave_status": "FOUND",
+      "reach_Q1": 20.115,
+      "full_status": "FOUND",
+      "phi_analytic": 19.585,
+      "sQ_peak": 20.15,
+      "DN_kink": 19.65
     },
     "副口径网页pile_cc|对数型": {
-      "leave_Q0": 18.173,
-      "reach_Q1": 18.173,
-      "phi_analytic": 18.655,
-      "sQ_peak": 18.2,
-      "DN_kink": 18.15
+      "leave_Q0": 18.586,
+      "leave_status": "FOUND",
+      "reach_Q1": 18.586,
+      "full_status": "FOUND",
+      "phi_analytic": 18.898,
+      "sQ_peak": 18.6,
+      "DN_kink": 18.55
     }
   },
-  "max_spread_three_criteria_dex": 1.414,
+  "max_spread_three_criteria_dex": 1.482,
   "bootstrap": [
     {
       "Q0口径": "主口径p*加权",
       "g": "指数型",
-      "point": 18.874,
-      "p05": 18.85,
-      "p95": 18.898
+      "point": 19.059,
+      "p05": 19.038,
+      "p95": 19.084,
+      "n_found": 300,
+      "n_total": 300
     },
     {
       "Q0口径": "主口径p*加权",
       "g": "幂函数型",
-      "point": 19.399,
-      "p05": 19.38,
-      "p95": 19.418
+      "point": 19.529,
+      "p05": 19.503,
+      "p95": 19.56,
+      "n_found": 300,
+      "n_total": 300
     },
     {
       "Q0口径": "主口径p*加权",
       "g": "对数型",
-      "point": 18.166,
-      "p05": 18.092,
-      "p95": 18.229
+      "point": 18.579,
+      "p05": 18.539,
+      "p95": 18.62,
+      "n_found": 300,
+      "n_total": 300
     },
     {
       "Q0口径": "副口径网页pile_cc",
       "g": "指数型",
-      "point": 18.956,
-      "p05": 18.932,
-      "p95": 18.979
+      "point": 19.132,
+      "p05": 19.109,
+      "p95": 19.158,
+      "n_found": 300,
+      "n_total": 300
     },
     {
       "Q0口径": "副口径网页pile_cc",
       "g": "幂函数型",
-      "point": 19.46,
-      "p05": 19.441,
-      "p95": 19.478
+      "point": 19.585,
+      "p05": 19.558,
+      "p95": 19.616,
+      "n_found": 300,
+      "n_total": 300
     },
     {
       "Q0口径": "副口径网页pile_cc",
       "g": "对数型",
-      "point": 18.173,
-      "p05": 18.1,
-      "p95": 18.235
+      "point": 18.586,
+      "p05": 18.546,
+      "p95": 18.627,
+      "n_found": 300,
+      "n_total": 300
     }
   ]
 }

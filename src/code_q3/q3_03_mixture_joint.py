@@ -24,6 +24,11 @@ RNG = np.random.default_rng(2026)
 IF1 = f"{ROOT}/outputs_q1/interface"
 
 if __name__ == "__main__":
+    raise SystemExit(
+        "本脚本是旧的配比联立探索：它读取问题一内部 GBDT，并把配比乘在整个损失上。"
+        "现行主结果固定推荐配比，配比系数只乘随规模下降的那一部分损失。"
+        "在按同一规则改写之前，不要把这里的输出当作问题三的主结论。"
+    )
     ps = pd.read_csv(f"{IF1}/P1_p_star.csv")
 
     dom = ps.domain.tolist()

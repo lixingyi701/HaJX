@@ -10,9 +10,12 @@ q3_01_optimize.py — 问题三·Step1-4：全组合最优解 + 求解器互验 
 """
 import numpy as np
 import pandas as pd
-from q3_00_model import (PAR, ETA, LCTX_CRIT, Q0_MAIN, Q0_WEB, G_FUNCS, G_LIST,
-                         LCTX_C7, REGIME_NAME, TAB, FIG, IFACE, loss, solve,
-                         N_star_closed, setup_cjk_matplotlib)
+from q3_00_model import (PAR, PAR_M1, PAR_NOFLOOR, PAR_HTOT, ETA, LCTX_CRIT, Q0_MAIN, Q0_WEB,
+                         H_TOT_SCALE, G_FUNCS, G_LIST, LCTX_C7, REGIME_NAME,
+                         TAB, FIG, IFACE, loss, solve, N_star_closed, phi_ratio,
+                         profile_loss, write_manifest, setup_cjk_matplotlib)
+
+STATE = {0: "LOWER", 1: "INTERIOR", 2: "UPPER"}
 
 C_MAIN = 10.0 ** np.arange(19, 26)
 Q0S = {"主口径p*加权": Q0_MAIN, "副口径网页pile_cc": Q0_WEB}
@@ -25,12 +28,21 @@ def run_grid():
             for Lc in LCTX_C7:
                 r = solve(C_MAIN, g, Lc, Q0)
                 for i in range(len(C_MAIN)):
-                    rows.append(dict(Q0口径=q0name, Q0=Q0, g=g, L_ctx=Lc,
-                                     log10C=np.log10(r["C"][i]), N_opt=r["N"][i],
-                                     D_opt=r["D"][i], Q_opt=r["Q"][i], L_opt=r["L"][i],
-                                     D_over_N=r["DN"][i], share_train=r["s_train"][i],
-                                     share_attn=r["s_attn"][i], share_Q=r["s_Q"][i],
-                                     regime=REGIME_NAME[int(r["regime"][i])]))
+                    rows.append(dict(
+                        scenario="main_identity", q_shape="pow", model="M4+F",
+                        evidence="B6半合成；地板在配比因子外",
+                        Q0口径=q0name, Q0=Q0, m=PAR["m"], g=g, L_ctx=Lc,
+                        log10C=np.log10(r["C"][i]), N_opt=r["N"][i],
+                        D_opt=r["D"][i], Q_opt=r["Q"][i], L_opt=r["L"][i],
+                        D_over_N=r["DN"][i],
+                        c_train=r["c_train"][i], c_attn=r["c_attn"][i], c_Q=r["c_Q"][i],
+                        c_total=r["c_total"][i], budget_use=r["budget_use"][i],
+                        budget_resid=r["budget_resid"][i],
+                        share_train=r["s_train"][i], share_attn=r["s_attn"][i],
+                        share_Q=r["s_Q"][i], share_denominator="实际总消耗",
+                        state=STATE[int(r["regime"][i])],
+                        regime=REGIME_NAME[int(r["regime"][i])],
+                        at_bound=bool(r["at_bound"][i])))
     return pd.DataFrame(rows)
 
 
@@ -105,6 +117,81 @@ if __name__ == "__main__":
     cf.to_csv(f"{TAB}/T1_closed_form_check.csv", index=False, encoding="utf-8-sig")
     print("闭式解互验：最大相对误差 %.2e（%d 组）" % (cf.rel_err.max(), len(cf)))
 
+    # ---------------- 验收 ----------------
+    share_err = (T.share_train + T.share_attn + T.share_Q - 1).abs().max()
+    print("预算相对残差最大 %.2e；份额和误差最大 %.2e；贴搜索边界 %d 组"
+          % (T.budget_resid.abs().max(), share_err, int(T.at_bound.sum())))
+    if T.budget_resid.abs().max() > 1e-9 or share_err > 1e-9:
+        raise SystemExit("成本记账未通过验收")
+    if (T.Q_opt < T.Q0 - 1e-8).any() or (T.Q_opt > 1 + 1e-8).any():
+        raise SystemExit("Q* 超出 [Q0, 1]")
+    if cf.rel_err.max() > 1e-5:
+        raise SystemExit("无提质开销闭式解未通过验收")
+    if chk.L_gap.min() < -2e-5:
+        raise SystemExit("求解器劣于粗网格")
+
+    # 有限差分核对剖面导数与 Φ 的关系：Φ = 提质收益 / 挤占损失
+    fd_rows = []
+    for label, Q in (("下界", Q0_MAIN), ("上界", 1.0)):
+        eps = 1e-4
+        if Q - eps < Q0_MAIN:
+            continue
+        C = 1e22
+        Lp = profile_loss(C, Q + eps, "对数型", 2048, Q0_MAIN)
+        Lm = profile_loss(C, Q - eps, "对数型", 2048, Q0_MAIN)
+        fd = (Lp - Lm) / (2 * eps)
+        phi = phi_ratio(C, "对数型", 2048, Q, Q0_MAIN)
+        # Φ=1 时剖面导数为 0；用 (Φ-1) 的符号与 fd 的符号对照，并报告 Φ
+        fd_rows.append(dict(point=label, Q=Q, fd_dL_dQ=fd, Phi=phi))
+    # 内点：在主口径、对数型、C=1e22 的最优 Q 上，剖面导数应接近 0
+    hit = T[(T.Q0口径 == "主口径p*加权") & (T.g == "对数型") & (T.L_ctx == 2048)
+            & (T.log10C == 22)]
+    Qh = float(hit.Q_opt.iloc[0])
+    if Q0_MAIN + 1e-3 < Qh < 1 - 1e-3:
+        eps = 1e-4
+        fd = (profile_loss(1e22, Qh + eps, "对数型", 2048, Q0_MAIN)
+              - profile_loss(1e22, Qh - eps, "对数型", 2048, Q0_MAIN)) / (2 * eps)
+        fd_rows.append(dict(point="内点", Q=Qh, fd_dL_dQ=fd,
+                            Phi=phi_ratio(1e22, "对数型", 2048, Qh, Q0_MAIN)))
+    pd.DataFrame(fd_rows).to_csv(f"{TAB}/T1_phi_finite_difference.csv", index=False, encoding="utf-8-sig")
+    print("剖面导数核对", fd_rows)
+
+    # ---------------- 对照：m=1、无地板、H_tot；锚点映射不静默截断 ----------------
+    sens_rows = []
+    for name, pset in (("m=1", PAR_M1), ("无地板", PAR_NOFLOOR)):
+        for g in G_LIST:
+            r = solve(C_MAIN, g, 2048, Q0_MAIN, p=pset)
+            for i in range(len(C_MAIN)):
+                sens_rows.append(dict(
+                    scenario=name, g=g, L_ctx=2048, Q0=Q0_MAIN, m=pset["m"],
+                    log10C=np.log10(r["C"][i]), N_opt=r["N"][i], D_opt=r["D"][i],
+                    Q_opt=r["Q"][i], L_opt=r["L"][i], state=STATE[int(r["regime"][i])]))
+    sens = pd.DataFrame(sens_rows)
+    for g in G_LIST:
+        r = solve(C_MAIN, g, 2048, Q0_MAIN, p=PAR_HTOT)
+        base = sens[(sens.scenario == "m=1") & (sens.g == g)].sort_values("log10C")
+        for i in range(len(C_MAIN)):
+            b = base.iloc[i]
+            if max(abs(r["N"][i] / b.N_opt - 1), abs(r["D"][i] / b.D_opt - 1),
+                   abs(r["Q"][i] - b.Q_opt)) > 1e-6:
+                raise SystemExit("H_tot 与 m=1 的最优配置不一致")
+            if abs(r["L"][i] / (b.L_opt * H_TOT_SCALE) - 1) > 1e-6:
+                raise SystemExit("H_tot 的损失缩放不正确")
+            sens_rows.append(dict(
+                scenario="H_tot", g=g, L_ctx=2048, Q0=Q0_MAIN, m=1.0,
+                log10C=np.log10(r["C"][i]), N_opt=r["N"][i], D_opt=r["D"][i],
+                Q_opt=r["Q"][i], L_opt=r["L"][i], state=STATE[int(r["regime"][i])]))
+    sens = pd.DataFrame(sens_rows)
+    sens.to_csv(f"{TAB}/T1_sensitivity_m_nofloor.csv", index=False, encoding="utf-8-sig")
+    q_alt = Q0_WEB / Q0_MAIN
+    pd.DataFrame([
+        dict(mapping="pstar_anchor", Q0_at_pstar=1.0, status="NO_QUALITY_RANGE",
+             note="锚点映射在 p* 上把 Q0 抬到 1，没有可提升区间"),
+        dict(mapping="pstar_anchor", domain="pile_cc", Q_B=q_alt, status="OUT_OF_SUPPORT",
+             note="pile_cc 映射后超过 1，按 clip_policy=error 记录，不截断、不优化"),
+    ]).to_csv(f"{TAB}/T1_alt_mapping_status.csv", index=False, encoding="utf-8-sig")
+    print("H_tot 与 m=1 同配置，损失缩放 %.6f" % H_TOT_SCALE)
+
     # ---------------- 细扫描 ----------------
     S = run_scan()
     S.to_pickle(f"{TAB}/T1_scan.pkl")
@@ -127,7 +214,7 @@ if __name__ == "__main__":
         ax.set_xlabel("log₁₀ C (FLOPs)"); ax.set_ylabel("最优质量 Q*")
         ax.set_title(f"{q0name}（Q₀={Q0:.3f}，L_ctx=2048）")
         ax.legend(loc="lower right")
-    fig.suptitle("图1  最优质量 Q* 随预算的变化：低预算不提质、跨过临界预算后跳到 Q=1")
+    fig.suptitle("图1  最优质量 Q* 随预算的变化（幂次主式，L_ctx=2048）")
     fig.tight_layout(); fig.savefig(f"{FIG}/F1_Qstar_vs_C.png"); plt.close(fig)
 
     # F2：成本份额堆叠
@@ -144,7 +231,7 @@ if __name__ == "__main__":
             if r_ == 1: ax.set_xlabel("log₁₀ C")
             if c_ == 0: ax.set_ylabel("预算份额")
     axes[0, 0].legend(loc="lower left", fontsize=8)
-    fig.suptitle("图2  三项成本占预算份额（纵轴从 0.8 起，放大提质份额的先升后降）")
+    fig.suptitle("图2  三项成本占实际总消耗的份额（纵轴从 0.8 起）")
     fig.tight_layout(); fig.savefig(f"{FIG}/F2_cost_shares.png"); plt.close(fig)
 
     # F3：N*、D*、D/N
@@ -162,7 +249,7 @@ if __name__ == "__main__":
     for ax in axes:
         ax.set_xlabel("log₁₀ C"); ax.legend(fontsize=8)
     axes[2].set_title("D*/N*：转移处出现凹陷（提质挤占 D）")
-    fig.suptitle("图3  最优规模配置（副口径 Q₀=0.889，L_ctx=2048）")
+    fig.suptitle(f"图3  最优规模配置（网页域对照 Q₀={Q0_WEB:.3f}，L_ctx=2048）")
     fig.tight_layout(); fig.savefig(f"{FIG}/F3_NDratio.png"); plt.close(fig)
 
     # F4：L_ctx 敏感性（C=1e22，对数型、主口径）+ 解析骨架
@@ -195,4 +282,5 @@ if __name__ == "__main__":
     fig.colorbar(im, ax=axes[1], shrink=.8)
     fig.suptitle("图4  上下文长度敏感性")
     fig.tight_layout(); fig.savefig(f"{FIG}/F4_Lctx_sensitivity.png"); plt.close(fig)
+    write_manifest(["P3_optimal_config.csv"])
     print("done")

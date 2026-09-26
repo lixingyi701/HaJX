@@ -1,0 +1,29 @@
+{
+  "time_beijing": "2026-09-26T11:37:00+08:00",
+  "git_commit": "8f0f9e674cb24dce068301d94c33b237294301d6",
+  "q_shape": "pow",
+  "selected_model": "M4+F",
+  "floor": true,
+  "Q0_main": 0.6624116679870492,
+  "m": 0.8989423151944644,
+  "h_tot_scale": 0.9311640044387456,
+  "m_source": "exp(s_red·φ̃(p*))，只乘随规模下降的两项；地板 k0(1-Q) 在括号外",
+  "search_log10N": [
+    1.0,
+    17.0
+  ],
+  "share_denominator": "实际总消耗",
+  "evidence": "B6 半合成幂次主式；配比通道为探索性；高预算为外推",
+  "inputs": {
+    "P1_summary": "0f251c2d2fa75f39f07056a349545803dbfc8e31c27564ca2f2d4b697ea7648e",
+    "P2_scaling_law": "f1182ed5c1e20ae73e52cca21e5ea35a1dada4013e43e66a98f7d487ad66e515",
+    "P2_bootstrap": "0050cba55e53976c500595ac8c8c08dcbeb9564fb91a67b28975453fa32ecf6d",
+    "P1_Q_domain": "d0ca7cfcd0e5083368ced505074baa60773bbf0ea6c88436d15024ce2353d378",
+    "C7": "ee24622cb3a6334f08d72c9ea373be26d5e5585bb266367c5f66d77499112ffc"
+  },
+  "outputs": {
+    "P3_optimal_config.csv": "e0c0f525edededbef0604a8838b4d67fa8e8af0398a8e4ee7f44a7058f081d0f",
+    "P3_sensitivity_Lctx.csv": "035589ca985b5c252931b24e47730a41b64bba36bf8c156c31d355193eba1460",
+    "P3_structural_transition.json": "6b77da4f5e8eb0a1708571f3a1e60c411e41f56890d333d3925eec522a5c1124"
+  }
+}
