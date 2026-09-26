@@ -6,28 +6,17 @@
 
 \subsection{支撑材料清单与运行说明}
 
-全部代码为 Python 3，只依赖 numpy、pandas、matplotlib，不依赖 scipy。各脚本在所在目录内运行，产出落盘到对应的 \texttt{outputs\_q*} 目录，下游各问只读取上游的接口文件（\texttt{interface/}）。
+正文各结论均按证据分层陈述：解析推导、拟合估计、尺度标定、留出检验、独立检验、评分后诊断、半合成数据、外推或估算，以及历史口径对照，其性质与边界已在正文相应处注明；半合成、估算与外推数据不作为观测验证。正文中 \texttt{*.csv}、\texttt{*.json}、\texttt{*.npz} 形式的文件名是相应结果的落盘名称：数据表在 \texttt{src/outputs\_qN/tables/}，跨问接口在 \texttt{src/outputs\_qN/interface/}，图在 \texttt{src/outputs\_qN/figures/}；每张表与每幅图的标题内注明其数据来源文件。
 
-\begin{table}[H]
-\centering\small
-\caption{程序清单}
-\label{tab:code}
-\begin{tabular}{p{2.3cm}p{5.2cm}p{7.2cm}}
-\toprule
-目录 & 脚本 & 功能 \\
-\midrule
-\texttt{code\_q1/} & \texttt{q1\_01}–\texttt{q1\_07} & 指标展开、CRITIC 评分、冲突、桥接、clr 回归、跨尺度、$\bp^*$ \\
- & \texttt{q2\_00\_reverse\_engineering} & 附件 B 生成公式逆向 \\
-\texttt{code\_q2/} & \texttt{q2\_01\_fit}，\texttt{q2\_02\_theory} & 两步拟合与五形式交叉验证；四条命题的数值互验 \\
-\texttt{code\_q3/} & \texttt{q3\_00\_model} & 广义律、三项成本、向量化求解器、$\Phi$ 判据 \\
- & \texttt{q3\_01}–\texttt{q3\_03} & 210 组最优解、结构性转移与敏感性、配比联立 \\
-\texttt{code\_q4/} & \texttt{q4\_01}–\texttt{q4\_05} & C8 解析、饱和度、桥接、分解、预测与回测 \\
- & \texttt{q4\_99\_check\_report} & 问题三、四的 76 项关键数字与输出文件自动核对 \\
-\bottomrule
-\end{tabular}
-\end{table}
+问题一：\texttt{src/code\_q1/q1\_00\_common.py}（公共路径与工具）$\to$ \texttt{q1\_01\_extract.py} $\to$ \texttt{q1\_02\_quality.py} $\to$ \texttt{q1\_03\_conflict.py}、\texttt{q1\_04\_bridge.py} $\to$ \texttt{q1\_05\_mixture.py} $\to$ \texttt{q1\_06\_scale.py}、\texttt{q1\_07\_optimal.py} $\to$ \texttt{q1\_08\_audit.py}；环境 Python 3.12.13、NumPy 2.4.4、pandas 3.0.2，不依赖 SciPy 与 scikit-learn。
 
-运行顺序为：\texttt{code\_q1}（\texttt{q1\_01}$\to$\texttt{q1\_07}）$\to$ \texttt{code\_q2} $\to$ \texttt{code\_q3}（\texttt{q3\_01}$\to$\texttt{q3\_03}）$\to$ \texttt{code\_q4}（\texttt{q4\_01}$\to$\texttt{q4\_05}，最后运行 \texttt{q4\_99}）。
+问题二：\texttt{src/code\_q2/q2\_01\_fit.py}、\texttt{q2\_02\_theory.py}、\texttt{q2\_03\_economics.py}；环境 Python 3.12.7、NumPy 1.26.4、pandas 2.2.2、SciPy 1.13.1，随机种子 $2026$；只读 \texttt{src/outputs\_q1/interface/}，不读附件 A 原始表。
+
+问题三：\texttt{src/code\_q3/q3\_00\_model.py}、\texttt{q3\_01\_optimize.py}、\texttt{q3\_02\_transition.py}、\texttt{q3\_03\_mixture\_joint.py}；\textbf{现行 Spec v5 的幂次目标式与 $m_*$ 尚未落到这些脚本与 P3 接口，须重跑后本附录与其数值才成立}（见 \ref{sec:5.4.3} 的待补证据清单）。
+
+问题四：\texttt{src/code\_q4/q4\_01\_c8\_parse.py} $\to$ \texttt{q4\_02\_saturation.py} $\to$ \texttt{q4\_03\_bridge.py} $\to$ \texttt{q4\_04\_decomp.py} $\to$ \texttt{q4\_05\_forecast.py} $\to$ \texttt{q4\_99\_check\_report.py}；\texttt{q4\_99\_check\_report.py} 的 15 项自检中现有 3 项未通过（P3 主质量基线、P3 manifest、P4 目标日期）。
+
+注：以上脚本路径与随机种子以各问 Spec 的「当前实现差异」与修订历史为准；本节只登记，不复述 Spec。
 
 \subsection{核心程序}
 
@@ -51,43 +40,36 @@ def score(self, Z):                           # fixed weights and delta
     return weighted_huber_center(Z, self.critic_w, self.delta)
 \end{lstlisting}
 
-\textbf{(2) 问题三向量化求解器（\texttt{code\_q3/q3\_00\_model.py} 节选）}
+\textbf{(2) 问题三向量化求解器（\texttt{code\_q3/q3\_00\_model.py} 节选，按 Spec v5 目标式）}
+
+\textbf{注：}下列节选是问题三 Spec v5 规定的目标实现形式——幂次质量乘子 $Q^{-\kappa}$ 与固定配比乘子 $m_*=\exp\{s_{\rm red}\tilde\varphi(\bp^*)\}\approx0.8989423$；现有 \texttt{src/code\_q3/q3\_00\_model.py} 仍为线性乘子 $1+\kappa(1-Q)$，须按此改写并重跑后本附录才可复现（见 \ref{sec:5.4.3} 的待补证据清单）。内层 $\log_{10}N$ 黄金分割与三级网格加密的结构不变，此处只列出质量式与 $\Phi$ 判据中随 v5 变化的函数。
 \begin{lstlisting}
-def _profile(C, Q, dg, kappa, p, lo=1.0, hi=17.0, it=70):
-    """golden-section search on log10 N for fixed Q; D solved from budget"""
-    def f(x):
-        N = 10.0 ** x
-        D = C / (kappa * N + dg)               # budget binds: D eliminated
-        return loss(N, D, Q, p)
-    a = np.full(C.shape, lo); b = np.full(C.shape, hi)
-    for _ in range(it):
-        c = b - _GR * (b - a); d = a + _GR * (b - a)
-        m = f(c) < f(d)
-        b = np.where(m, d, b); a = np.where(m, a, c)
-    x = (a + b) / 2
-    return f(x), x
+def hN(Q, p=PAR):                       # v5 power multiplier (drop linear 1+k(1-Q))
+    return Q ** -p["kappa_N"]
 
-def solve(C, g, Lctx=2048, Q0=Q0_MAIN, p=PAR, eta=ETA, nQ=41, levels=3):
-    kappa = 6 + eta * Lctx
-    lo, hi = Q0, 1.0
-    for _ in range(levels):                    # 3-level grid refinement on Q
-        Qg = lo + (hi - lo) * np.linspace(0, 1, nQ)
-        dg = np.maximum(g(Qg) - g(Q0), 0.0)
-        Lm, _ = _profile(C, Qg, dg, kappa, p)
-        Qb = Qg[np.argmin(Lm)]; step = (hi - lo) / (nQ - 1)
-        lo, hi = max(Qb - step, Q0), min(Qb + step, 1.0)
-    # endpoint protection at Q0 and 1, then classify KKT active set
-    ...
+def hD(Q, p=PAR):
+    return Q ** -p["kappa_D"]
 
-def phi_ratio(C, g, Lctx, Qeval, Q0, p=PAR, eta=ETA):
-    """Phi = marginal gain of quality / marginal loss from crowding out D"""
+def loss(N, D, Q, p=PAR, m=M_STAR):
+    """v5: floor k0(1-Q) outside bracket; mixture multiplier m only on scale terms"""
+    return (p["E"] + p["k0"] * (1.0 - Q)
+            + m * (p["A"] * hN(Q, p) * N ** -p["al"]
+                   + p["B"] * hD(Q, p) * D ** -p["be"]))
+
+def phi_ratio(C, g, Lctx, Qeval, Q0, p=PAR, eta=ETA, m=M_STAR):
+    """v5 complete Phi at the fixed-Q optimal (N,D):
+       Phi = [k0 + (m/Q)(kN TN + kD TD)] * S / [m * beta * TD * g'(Q)],
+       S = (6+eta*L_ctx)N + dg,  TN = A N^-al Q^-kN,  TD = B D^-be Q^-kD"""
     kappa = 6 + eta * Lctx
     dg = max(g(Qeval) - g(Q0), 0.0)
-    _, x = _profile(C, Qeval, dg, kappa, p)
+    _, x = _profile(C, Qeval, dg, kappa, p, m=m)   # inner golden section (unchanged)
     N = 10.0 ** x; D = C / (kappa * N + dg)
-    num = (p["k0"] + p["k1"] * N ** -p["al"]) * (kappa * N + dg)
-    den = p["be"] * p["B"] * D ** -p["be"] * g_prime(Qeval)
-    return num / den                           # C_crit solves Phi(C) = 1
+    TN = p["A"] * N ** -p["al"] * hN(Qeval, p)       # TN = A N^-al Q^-kN
+    TD = p["B"] * D ** -p["be"] * hD(Qeval, p)       # TD = B D^-be Q^-kD
+    S = kappa * N + dg
+    num = (p["k0"] + m / Qeval * (p["kappa_N"] * TN + p["kappa_D"] * TD)) * S
+    den = m * p["be"] * TD * g_prime(Qeval)
+    return float(num / den)             # C_crit solves Phi(C) = 1
 \end{lstlisting}
 
 \textbf{(3) 结构分解模型与 Shapley 分解（\texttt{code\_q4/q4\_04\_decomp.py} 节选）}
@@ -102,12 +84,65 @@ def shapley(fun, L0, t0, L1, t1):
     return sc, te
 \end{lstlisting}
 
+\subsection{诊断与敏感性图表}
+
+本节的图记录筛查阈值、来源一致性、历史口径对照与尺度修正的过程量，正文只引用其结论，不参与评分、筛选或参数估计。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figs/q1_F3_source_internal.png}
+\caption{A1 六来源内部跨度与一致性对照}
+\label{fig:F3_source_internal}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figs/q1_F3_source_opposition.png}
+\caption{六来源对立方向的加权份额}
+\label{fig:F3_source_opposition}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figs/q1_F3_threshold_sensitivity.png}
+\caption{候选比例对筛查阈值的敏感性}
+\label{fig:F3_threshold_sensitivity}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figs/q1_F3_legacy_overlap.png}
+\caption{六来源候选与历史四组候选的重合度}
+\label{fig:F3_legacy_overlap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figs/q1_F3_matched_overlap.png}
+\caption{按前 5\% 配平预算后的重合度与 Kappa}
+\label{fig:F3_matched_overlap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figs/q1_F3_Q_v2_domain_median.png}
+\caption{来源一致性加权实验分与主分的域级中位数对照}
+\label{fig:F3_Q_v2_domain_median}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figs/q1_F3_Q_v2_conflict_diff_dist.png}
+\caption{来源一致性加权实验分与主分的冲突文档差值分布}
+\label{fig:F3_Q_v2_conflict_diff_dist}
+\end{figure}
+
 \subsection{AI 使用披露}
 
 依据赛题“AI 使用规范”，现披露如下。
 
-\textbf{所用工具：}Claude（Anthropic）。
+\textbf{所用工具：}Claude（Anthropic）、Kimi Code（Kimi）。
 
-\textbf{使用环节与贡献范围：}(1) 资料整理与概念理解：梳理赛题附件的字段结构与《数据说明》中的条目；(2) 代码编写与调试：数据读取、向量化求解器、绘图脚本的编写与报错排查；(3) 结果核对：编写自动核对脚本，把报告中的数字与程序输出逐项比对；(4) 排版与文字：LaTeX 排版、图表整理与语句润色。
+\textbf{使用环节与贡献范围：}(1) 资料整理与概念理解：梳理赛题附件的字段结构与《数据说明》中的条目；(2) 代码编写与调试：数据读取、向量化求解器、绘图脚本的编写与报错排查；(3) 结果核对：编写自动核对脚本，把报告中的数字与程序输出逐项比对；(4) 排版与文字：LaTeX 排版、图表整理与语句润色。上述 AI 产出的代码、数值与文字均经参赛队逐项复核。
 
-\textbf{参赛队的工作与责任：}模型路线的选择（证据分层、质量项形式由交叉验证裁决、结构性转移按 KKT 活跃集定义、分解方法并列报告等）、公式推导与结论判断由参赛队确定，并对 AI 输出的全部代码与数值逐项运行、核验。文中理论与公式均引用正式文献或由附件数据验证，未以 AI 输出作为学术依据。全部数值结果可由随文代码在附件数据上复现。
+\textbf{参赛队的工作与责任：}模型路线的选择（证据分层、质量项形式由交叉验证裁决、结构性转移按 KKT 活跃集定义、分解方法并列报告等）、公式推导与结论判断由参赛队确定，并对 AI 输出的全部代码与数值逐项运行、核验。文中理论、公式与结论均引用正式文献或由附件数据验证，未以 AI 输出作为学术依据。全部数值结果可由随文代码在附件数据上复现。

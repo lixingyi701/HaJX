@@ -1,5 +1,5 @@
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{ctexhook}[2020/01/01 v0.0 shim]
+\ProvidesPackage{ctexhook}[2026/09/26 v0.1 shim]
 \RequirePackage{expl3}
 \ExplSyntaxOn
 \cs_new_protected:Npn \ctex_disable_package:n #1 { }
@@ -10,5 +10,8 @@
 \cs_new_protected:Npn \ctex_after_end_preamble:n #1 { \AtBeginDocument {#1} }
 \prg_new_conditional:Npnn \ctex_if_format_at_least:n #1 { T , F , TF }
   { \prg_return_true: }
+%% ctexpatch 2.6.5 与 xeCJK 依此登记 “命令钩子”；用 LaTeX 内核钩子实现同名语义。
+\cs_new_protected:Npn \ctex_gadd_ltxhook:nn #1#2
+  { \AddToHook { cmd/#1/after } {#2} }
 \ExplSyntaxOff
 \endinput
